@@ -386,6 +386,15 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             profile_id = int(data.split('_')[-1])
             # --- اینجا فراخوانی اصلاح شده است ---
             toggle_profile_status(call, profile_id)
+        elif data.startswith("admin_toggle_profile_"):
+            profile_id = int(data.split('_')[-1])
+            toggle_profile_status(call, profile_id)
+
+        # --- بخش جدید ---
+        elif data.startswith("admin_manage_profile_inbounds_"):
+            profile_id = int(data.split('_')[-1])
+            start_manage_profile_inbounds_flow(call, profile_id)
+    # -----------------
     # -------------------------
     # ---------------------------------------------
         else:
@@ -901,3 +910,16 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             show_single_profile_menu(admin_id, call.message, profile_id)
         else:
             _bot.answer_callback_query(call.id, "خطا در تغییر وضعیت!", show_alert=True)
+            
+            
+            
+            
+    def start_manage_profile_inbounds_flow(call, profile_id):
+        servers = _db_manager.get_all_servers()
+        if not servers:
+            _bot.answer_callback_query(call.id, "ابتدا باید حداقل یک سرور اضافه کنید.", show_alert=True)
+            return
+        
+        text = "لطفاً سروری که می‌خواهید اینباندهای آن را به پروفایل اضافه کنید، انتخاب نمایید:"
+        keyboard = inline_keyboards.get_server_selection_for_profile_menu(profile_id, servers)
+        _show_menu(call.from_user.id, text, keyboard, call.message)

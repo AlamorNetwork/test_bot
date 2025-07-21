@@ -873,3 +873,45 @@ class DatabaseManager:
         finally:
             if conn:
                 conn.close()
+                
+                
+    def get_profile_inbounds(self, profile_id):
+        """لیست IDهای server_inbound که به یک پروفایل متصل هستند را برمی‌گرداند."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT server_inbound_id FROM profile_inbounds WHERE profile_id = ?", (profile_id,))
+            # نتیجه را به یک لیست ساده از IDها تبدیل می‌کنیم
+            return [row['server_inbound_id'] for row in cursor.fetchall()]
+        except sqlite3.Error as e:
+            logger.error(f"Error getting inbounds for profile {profile_id}: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
+
+    def update_profile_inbounds(self, profile_id, server_inbound_ids: list):
+        """اتصال اینباندها به یک پروفایل را آپدیت می‌کند."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            # ابتدا تمام رکوردهای قدیمی این پروفایل را حذف می‌کنیم
+            cursor.execute("DELETE FROM profile_inbounds WHERE profile_id = ?", (profile_id,))
+            
+            # سپس رکوردهای جدید را اضافه می‌کنیم
+            if server_inbound_ids:
+                data_to_insert = [(profile_id, inbound_id) for inbound_id in server_inbound_ids]
+                cursor.executemany("INSERT INTO profile_inbounds (profile_id, server_inbound_id) VALUES (?, ?)", data_to_insert)
+            
+            conn.commit()
+            logger.info(f"Updated inbounds for profile ID {profile_id}.")
+            return True
+        except sqlite3.Error as e:
+            logger.error(f"Error updating inbounds for profile ID {profile_id}: {e}")
+            conn.rollback()
+            return False
+        finally:
+            if conn:
+                conn.close()

@@ -263,3 +263,18 @@ def get_single_profile_management_menu(profile_id, is_active):
     keyboard.add(back_button)
     
     return keyboard
+
+
+
+
+def get_server_selection_for_profile_menu(profile_id, servers):
+    """منوی انتخاب سرور برای مدیریت اینباندهای یک پروفایل را می‌سازد."""
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for server in servers:
+        # در callback_data، هم آیدی پروفایل و هم آیدی سرور را قرار می‌دهیم
+        callback_data = f"admin_profile_inbounds_select_server_{profile_id}_{server['id']}"
+        markup.add(types.InlineKeyboardButton(server['name'], callback_data=callback_data))
+    
+    # دکمه بازگشت به منوی مدیریت پروفایل تکی
+    markup.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"admin_view_profile_{profile_id}"))
+    return markup
