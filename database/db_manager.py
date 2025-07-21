@@ -821,3 +821,55 @@ class DatabaseManager:
         finally:
             if conn:
                 conn.close()
+                
+                
+                
+    def get_profile_by_id(self, profile_id):
+        """اطلاعات یک پروفایل خاص را با استفاده از ID آن برمی‌گرداند."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM profiles WHERE id = ?", (profile_id,))
+            profile = cursor.fetchone()
+            return dict(profile) if profile else None
+        except sqlite3.Error as e:
+            logger.error(f"Error getting profile by ID {profile_id}: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
+
+    def delete_profile(self, profile_id):
+        """یک پروفایل را از دیتابیس حذف می‌کند."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            # با حذف پروفایل، رکوردهای مرتبط در profile_inbounds هم حذف می‌شوند (ON DELETE CASCADE)
+            cursor.execute("DELETE FROM profiles WHERE id = ?", (profile_id,))
+            conn.commit()
+            logger.info(f"Profile with ID {profile_id} has been deleted.")
+            return cursor.rowcount > 0
+        except sqlite3.Error as e:
+            logger.error(f"Error deleting profile with ID {profile_id}: {e}")
+            return False
+        finally:
+            if conn:
+                conn.close()
+
+    def update_profile_status(self, profile_id, is_active):
+        """وضعیت فعال/غیرفعال بودن یک پروفایل را تغییر می‌دهد."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE profiles SET is_active = ? WHERE id = ?", (is_active, profile_id))
+            conn.commit()
+            return True
+        except sqlite3.Error as e:
+            logger.error(f"Error updating profile status for ID {profile_id}: {e}")
+            return False
+        finally:
+            if conn:
+                conn.close()

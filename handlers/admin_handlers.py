@@ -373,6 +373,19 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             process_payment_approval(admin_id, int(data.split('_')[-1]), message)
         elif data.startswith("admin_reject_payment_"):
             process_payment_rejection(admin_id, int(data.split('_')[-1]), message)
+        elif data.data.startswith("admin_view_profile_"):
+            profile_id = int(data.data.split('_')[-1])
+            show_single_profile_menu(admin_id, data.message, profile_id)
+            
+        elif data.data.startswith("admin_delete_profile_"):
+            profile_id = int(data.data.split('_')[-1])
+            # TODO: افزودن کیبورد تایید حذف
+            confirm_delete_profile(admin_id, data.message, profile_id)
+
+        elif data.data.startswith("admin_toggle_profile_"):
+            profile_id = int(data.data.split('_')[-1])
+            toggle_profile_status(admin_id, data.message, profile_id)
+    # ---------------------------------------------
         else:
             _bot.edit_message_text(messages.UNDER_CONSTRUCTION, admin_id, message.message_id, reply_markup=inline_keyboards.get_back_button("admin_main_menu"))
     @_bot.message_handler(func=lambda msg: helpers.is_admin(msg.from_user.id) and _admin_states.get(msg.from_user.id))
@@ -841,3 +854,43 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             keyboard = inline_keyboards.get_profiles_list_menu(profiles, action_prefix="admin_view_profile")
 
         _show_menu(admin_id, text, keyboard, message)
+        
+        
+        
+    def show_single_profile_menu(admin_id, message, profile_id):
+        profile = _db_manager.get_profile_by_id(profile_id)
+        if not profile:
+            _bot.answer_callback_query(message.id, "خطا: این پروفایل یافت نشد. ممکن است حذف شده باشد.", show_alert=True)
+            show_profiles_list(admin_id, message) # بازگشت به لیست
+            return
+
+        status_emoji = "✅ (فعال)" if profile['is_active'] else "❌ (غیرفعال)"
+        text = f"🧬 **مدیریت پروفایل: {profile['name']}**\n\nوضعیت: {status_emoji}"
+        
+        keyboard = inline_keyboards.get_single_profile_management_menu(profile_id, profile['is_active'])
+        _show_menu(admin_id, text, keyboard, message)
+
+    # تابع جدید برای مدیریت حذف پروفایل
+    def confirm_delete_profile(admin_id, message, profile_id):
+        # اینجا می‌توان یک مرحله تایید هم اضافه کرد، اما فعلا مستقیم حذف می‌کنیم
+        if _db_manager.delete_profile(profile_id):
+            _bot.answer_callback_query(message.id, "پروفایل با موفقیت حذف شد.")
+            # --- اینجا باگ برطرف شده است ---
+            show_profiles_list(admin_id, message) # فراخوانی تابع با آرگومان‌های صحیح
+            # --------------------------------
+        else:
+            _bot.answer_callback_query(message.id, "خطا در حذف پروفایل!", show_alert=True)
+    # تابع جدید برای تغییر وضعیت پروفایل
+    def toggle_profile_status(admin_id, message, profile_id):
+        profile = _db_manager.get_profile_by_id(profile_id)
+        if not profile:
+            _bot.answer_callback_query(message.id, "خطا: پروفایل یافت نشد.", show_alert=True)
+            return
+
+        new_status = not profile['is_active']
+        if _db_manager.update_profile_status(profile_id, new_status):
+            _bot.answer_callback_query(message.id, f"وضعیت پروفایل تغییر کرد.")
+            # نمایش مجدد همین منو با وضعیت جدید
+            show_single_profile_menu(admin_id, message, profile_id)
+        else:
+            _bot.answer_callback_query(message.id, "خطا در تغییر وضعیت!", show_alert=True)
