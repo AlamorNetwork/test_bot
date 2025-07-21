@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # --- Variables ---
-REPO_URL="git@github.com:AlamorNetwork/Test_Bot_Alamalor.git"
+REPO_URL="https://github.com/AlamorNetwork/Test_Bot_Alamalor.git"
 PROJECT_NAME="AlamorVPN_Bot"
 INSTALL_DIR="/var/www/alamorvpn_bot"
 BOT_SERVICE_NAME="alamorbot.service"
