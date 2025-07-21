@@ -332,6 +332,7 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         # --- پایان بخش اصلاح شده ---
 
         actions = {
+            "admin_list_profiles": show_profiles_list,
             "admin_create_backup": create_backup,
             "admin_main_menu": _show_admin_main_menu,
             "admin_server_management": _show_server_management_menu,
@@ -825,3 +826,18 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         _bot.send_message(admin_id, text, parse_mode='Markdown')
         _clear_admin_state(admin_id)
         _show_profile_management_menu(admin_id) # نمایش مجدد منوی پروفایل
+        
+        
+        
+    def show_profiles_list(admin_id, message):
+        profiles = _db_manager.get_all_profiles()
+        if not profiles:
+            text = "هنوز هیچ پروفایلی ساخته نشده است."
+            keyboard = inline_keyboards.get_profile_management_menu() # بازگشت به منوی قبلی
+        else:
+            text = "📋 **لیست پروفایل‌های شما:**\n\nبرای مدیریت هر پروفایل، روی آن کلیک کنید."
+            # از کیبورد آماده شما برای ساخت لیست استفاده می‌کنیم
+            # پیشوند 'admin_view_profile' را برای اقدامات بعدی در نظر می‌گیریم
+            keyboard = inline_keyboards.get_profiles_list_menu(profiles, action_prefix="admin_view_profile")
+
+        _show_menu(admin_id, text, keyboard, message)

@@ -800,3 +800,24 @@ class DatabaseManager:
             return False
         finally:
             if conn: conn.close()
+            
+            
+            
+    def get_all_profiles(self):
+        """
+        تمام پروفایل‌های موجود در دیتابیس را برمی‌گرداند.
+        """
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name, is_active FROM profiles ORDER BY id DESC")
+            profiles = cursor.fetchall()
+            # تبدیل نتیجه به لیست دیکشنری‌ها برای استفاده آسان‌تر
+            return [dict(profile) for profile in profiles]
+        except sqlite3.Error as e:
+            logger.error(f"Error getting all profiles: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
