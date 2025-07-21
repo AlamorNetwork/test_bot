@@ -379,11 +379,13 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             
         elif data.startswith("admin_delete_profile_"):
             profile_id = int(data.split('_')[-1])
-            confirm_delete_profile(admin_id, message, profile_id)
+            # --- اینجا فراخوانی اصلاح شده است ---
+            confirm_delete_profile(call, profile_id)
 
         elif data.startswith("admin_toggle_profile_"):
             profile_id = int(data.split('_')[-1])
-            toggle_profile_status(admin_id, message, profile_id)
+            # --- اینجا فراخوانی اصلاح شده است ---
+            toggle_profile_status(call, profile_id)
     # -------------------------
     # ---------------------------------------------
         else:
