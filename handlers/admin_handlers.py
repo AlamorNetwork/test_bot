@@ -373,18 +373,18 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             process_payment_approval(admin_id, int(data.split('_')[-1]), message)
         elif data.startswith("admin_reject_payment_"):
             process_payment_rejection(admin_id, int(data.split('_')[-1]), message)
-        elif data.data.startswith("admin_view_profile_"):
-            profile_id = int(data.data.split('_')[-1])
-            show_single_profile_menu(admin_id, data.message, profile_id)
+        elif data.startswith("admin_view_profile_"):
+            profile_id = int(data.split('_')[-1])
+            show_single_profile_menu(admin_id, message, profile_id)
             
-        elif data.data.startswith("admin_delete_profile_"):
-            profile_id = int(data.data.split('_')[-1])
-            # TODO: افزودن کیبورد تایید حذف
-            confirm_delete_profile(admin_id, data.message, profile_id)
+        elif data.startswith("admin_delete_profile_"):
+            profile_id = int(data.split('_')[-1])
+            confirm_delete_profile(admin_id, message, profile_id)
 
-        elif data.data.startswith("admin_toggle_profile_"):
-            profile_id = int(data.data.split('_')[-1])
-            toggle_profile_status(admin_id, data.message, profile_id)
+        elif data.startswith("admin_toggle_profile_"):
+            profile_id = int(data.split('_')[-1])
+            toggle_profile_status(admin_id, message, profile_id)
+    # -------------------------
     # ---------------------------------------------
         else:
             _bot.edit_message_text(messages.UNDER_CONSTRUCTION, admin_id, message.message_id, reply_markup=inline_keyboards.get_back_button("admin_main_menu"))
