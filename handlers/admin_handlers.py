@@ -233,7 +233,14 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             
         # --- شرط جدید ---
         elif state == 'waiting_for_profile_name':
-            process_add_profile_name(admin_id, message)
+            profile_name = text.strip()
+            profile_id = _db_manager.add_profile(profile_name)
+            if profile_id:
+                _bot.edit_message_text(f"✅ پروفایل **{profile_name}** با موفقیت ایجاد شد.", admin_id, prompt_id, parse_mode='Markdown')
+                _clear_admin_state(admin_id)
+                _show_profile_management_menu(admin_id)
+            else:
+                _bot.edit_message_text(f"⚠️ خطایی رخ داد! پروفایلی با نام **{profile_name}** از قبل وجود دارد. لطفاً نام دیگری انتخاب کنید.", admin_id, prompt_id, parse_mode='Markdown')
         # ------------------
             
         # --- Inbound Flow ---
@@ -331,13 +338,12 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         # --- پایان بخش اصلاح شده ---
 
         actions = {
-            "admin_list_profiles": show_profiles_list,
-            "admin_create_backup": create_backup,
             "admin_main_menu": _show_admin_main_menu,
             "admin_server_management": _show_server_management_menu,
             "admin_plan_management": _show_plan_management_menu,
             "admin_payment_management": _show_payment_gateway_management_menu,
             "admin_user_management": _show_user_management_menu,
+            "admin_profile_management": _show_profile_management_menu, # <-- اضافه شده
             "admin_add_server": start_add_server_flow,
             "admin_delete_server": start_delete_server_flow,
             "admin_add_plan": start_add_plan_flow,
@@ -350,81 +356,35 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             "admin_list_gateways": list_gateways_action,
             "admin_list_users": list_all_users,
             "admin_manage_inbounds": start_manage_inbounds_flow,
-            "admin_profile_management": _show_profile_management_menu,
-            "admin_add_profile": start_add_profile_flow,
+            "admin_create_backup": create_backup,
+            "admin_add_profile": start_add_profile_flow, # <-- اضافه شده
+            "admin_list_profiles": list_profiles_for_management, # <-- اضافه شده
         }
         
         if data in actions:
-            _clear_admin_state(admin_id)
-            actions[data](admin_id, message)
-            return
+            actions[data](admin_id, message); return
+
 
         # --- هندل کردن موارد پیچیده‌تر ---
-        if data.startswith("gateway_type_"):
-            handle_gateway_type_selection(admin_id, call.message, data.replace('gateway_type_', ''))
-        elif data.startswith("plan_type_"):
-            get_plan_details_from_callback(admin_id, message, data.replace('plan_type_', ''))
-        elif data.startswith("confirm_delete_server_"):
-            execute_delete_server(admin_id, message, int(data.split('_')[-1]))
-        elif data.startswith("inbound_"):
-            handle_inbound_selection(admin_id, call)
-        elif data.startswith("admin_approve_payment_"):
-            process_payment_approval(admin_id, int(data.split('_')[-1]), message)
-        elif data.startswith("admin_reject_payment_"):
-            process_payment_rejection(admin_id, int(data.split('_')[-1]), message)
-        elif data.startswith("admin_view_profile_"):
-            profile_id = int(data.split('_')[-1])
-            show_single_profile_menu(admin_id, message, profile_id)
-            
-        elif data.startswith("admin_delete_profile_"):
-            profile_id = int(data.split('_')[-1])
-            # --- اینجا فراخوانی اصلاح شده است ---
-            confirm_delete_profile(call, profile_id)
-
-        elif data.startswith("admin_toggle_profile_"):
-            profile_id = int(data.split('_')[-1])
-            # --- اینجا فراخوانی اصلاح شده است ---
-            toggle_profile_status(call, profile_id)
-        elif data.startswith("admin_toggle_profile_"):
-            profile_id = int(data.split('_')[-1])
-            toggle_profile_status(call, profile_id)
-
-        # --- بخش جدید ---
-        elif data.startswith("admin_manage_profile_inbounds_"):
-            profile_id = int(data.split('_')[-1])
-            start_manage_profile_inbounds_flow(call, profile_id)
-        elif data.startswith("admin_manage_profile_inbounds_"):
-            profile_id = int(data.split('_')[-1])
-            start_manage_profile_inbounds_flow(call, profile_id)
-            
-        # --- بخش جدید ---
+        if data.startswith("plan_type_"): get_plan_details_from_callback(admin_id, message, data.replace('plan_type_', ''))
+        elif data.startswith("gateway_type_"): handle_gateway_type_selection(admin_id, message, data.replace('gateway_type_', ''))
+        elif data.startswith("confirm_delete_server_"): execute_delete_server(admin_id, message, int(data.split('_')[-1]))
+        elif data.startswith("inbound_"): handle_inbound_selection(admin_id, call)
+        elif data.startswith("admin_approve_payment_"): process_payment_approval(admin_id, int(data.split('_')[-1]), message)
+        elif data.startswith("admin_reject_payment_"): process_payment_rejection(admin_id, int(data.split('_')[-1]), message)
+        # --- هندلرهای جدید برای پروفایل ---
+        elif data.startswith("admin_view_profile_"): view_single_profile_menu(admin_id, message, int(data.split('_')[-1]))
+        elif data.startswith("admin_delete_profile_"): confirm_delete_profile(call, int(data.split('_')[-1]))
+        elif data.startswith("admin_toggle_profile_status_"): toggle_profile_status(call, int(data.split('_')[-1]))
+        elif data.startswith("admin_manage_profile_inbounds_"): start_manage_profile_inbounds_flow(call, int(data.split('_')[-1]))
         elif data.startswith("admin_profile_inbounds_select_server_"):
-            parts = data.split('_')
-            profile_id = int(parts[-2])
-            server_id = int(parts[-1])
+            parts = data.split('_'); profile_id, server_id = int(parts[-2]), int(parts[-1])
             show_profile_inbounds_for_server(call, profile_id, server_id)
-        elif data.startswith("admin_profile_inbounds_select_server_"):
-            parts = data.split('_')
-            profile_id = int(parts[-2])
-            server_id = int(parts[-1])
-            show_profile_inbounds_for_server(call, profile_id, server_id)
-            
-        # --- بخش جدید ---
         elif data.startswith("admin_profile_toggle_inbound_"):
-            parts = data.split('_')
-            profile_id = int(parts[-2])
-            db_inbound_id = int(parts[-1])
+            parts = data.split('_'); profile_id, db_inbound_id = int(parts[-2]), int(parts[-1])
             handle_toggle_profile_inbound(call, profile_id, db_inbound_id)
-
-        elif data.startswith("admin_profile_save_inbounds_"):
-            profile_id = int(data.split('_')[-1])
-            save_profile_inbounds(call, profile_id)
-    # -----------------
-    # -----------------
-    # -------------------------
-    # ---------------------------------------------
-        else:
-            _bot.edit_message_text(messages.UNDER_CONSTRUCTION, admin_id, message.message_id, reply_markup=inline_keyboards.get_back_button("admin_main_menu"))
+        elif data.startswith("admin_profile_save_inbounds_"): save_profile_inbounds(call, int(data.split('_')[-1]))
+        else: _bot.edit_message_text(messages.UNDER_CONSTRUCTION, admin_id, message.message_id, reply_markup=inline_keyboards.get_back_button("admin_main_menu"))
     @_bot.message_handler(func=lambda msg: helpers.is_admin(msg.from_user.id) and _admin_states.get(msg.from_user.id))
     def handle_admin_stateful_messages(message):
         _handle_stateful_message(message.from_user.id, message)
@@ -850,189 +810,115 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             
             
             
+    def _show_profile_management_menu(admin_id, message=None):
+        """منوی اصلی بخش مدیریت پروفایل‌ها را نمایش می‌دهد."""
+        _show_menu(admin_id, "🧬 **مدیریت پروفایل‌ها**\n\nاز این بخش می‌توانید پروفایل‌های ترکیبی را تعریف و مدیریت کنید.", inline_keyboards.get_profile_management_menu(), message)
+
     def start_add_profile_flow(admin_id, message):
+        """فرآیند افزودن یک پروفایل جدید را آغاز می‌کند."""
         _clear_admin_state(admin_id)
-        # درخواست نام پروفایل از ادمین
-        prompt_message = _bot.edit_message_text(
-            "لطفاً نام پروفایل جدید را وارد کنید:",
-            admin_id,
-            message.message_id
-        )
-        # ثبت مرحله بعدی برای دریافت پاسخ
-        _admin_states[admin_id] = {'state': 'waiting_for_profile_name', 'prompt_message_id': prompt_message.message_id, 'data': {}}
+        prompt = _bot.edit_message_text("لطفاً یک نام برای پروفایل جدید وارد کنید:", admin_id, message.message.message_id)
+        _admin_states[admin_id] = {'state': 'waiting_for_profile_name', 'prompt_message_id': prompt.message_id, 'data': {}}
 
-    # تابع جدید برای پردازش نام پروفایل
-    def process_add_profile_name(admin_id, message):
-        profile_name = message.text.strip()
-        
-        # افزودن پروفایل به دیتابیس
-        profile_id = _db_manager.add_profile(profile_name)
-
-        if profile_id:
-            text = f"✅ پروفایل **{profile_name}** با موفقیت ایجاد شد."
-        else:
-            text = f"⚠️ خطایی رخ داد! پروفایلی با نام **{profile_name}** از قبل وجود دارد."
-        
-        _bot.send_message(admin_id, text, parse_mode='Markdown')
-        _clear_admin_state(admin_id)
-        _show_profile_management_menu(admin_id) # نمایش مجدد منوی پروفایل
-        
-        
-        
-    def show_profiles_list(admin_id, message):
-        profiles = _db_manager.get_all_profiles()
+    def list_profiles_for_management(admin_id, message):
+        """لیست پروفایل‌ها را برای مدیریت نمایش می‌دهد."""
+        profiles = _db_manager.get_all_profiles(only_active=False)
         if not profiles:
-            text = "هنوز هیچ پروفایلی ساخته نشده است."
-            keyboard = inline_keyboards.get_profile_management_menu() # بازگشت به منوی قبلی
-        else:
-            text = "📋 **لیست پروفایل‌های شما:**\n\nبرای مدیریت هر پروفایل، روی آن کلیک کنید."
-            # از کیبورد آماده شما برای ساخت لیست استفاده می‌کنیم
-            # پیشوند 'admin_view_profile' را برای اقدامات بعدی در نظر می‌گیریم
-            keyboard = inline_keyboards.get_profiles_list_menu(profiles, action_prefix="admin_view_profile")
+            _bot.edit_message_text("هیچ پروفایلی یافت نشد. لطفاً ابتدا یک پروفایل بسازید.", admin_id, message.message.message_id, reply_markup=inline_keyboards.get_back_button("admin_profile_management"))
+            return
+        _bot.edit_message_text("کدام پروفایل را می‌خواهید مدیریت کنید؟", admin_id, message.message.message_id, reply_markup=inline_keyboards.get_profiles_list_menu(profiles, "admin_view_profile"))
 
-        _show_menu(admin_id, text, keyboard, message)
-        
-        
-        
-    def show_single_profile_menu(admin_id, message, profile_id):
+    def view_single_profile_menu(admin_id, message, profile_id):
+        """منوی مدیریت برای یک پروفایل خاص را نمایش می‌دهد."""
         profile = _db_manager.get_profile_by_id(profile_id)
         if not profile:
-            _bot.answer_callback_query(message.id, "خطا: این پروفایل یافت نشد. ممکن است حذف شده باشد.", show_alert=True)
-            show_profiles_list(admin_id, message) # بازگشت به لیست
+            _bot.answer_callback_query(message.id, "خطا: پروفایل یافت نشد.", show_alert=True)
+            list_profiles_for_management(admin_id, message)
             return
+        status = "✅ فعال" if profile['is_active'] else "❌ غیرفعال"
+        text = f"🧬 **مدیریت پروفایل: {helpers.escape_markdown_v1(profile['name'])}**\n\n**وضعیت:** {status}"
+        _show_menu(admin_id, text, inline_keyboards.get_single_profile_management_menu(profile_id, profile['is_active']), message)
 
-        status_emoji = "✅ (فعال)" if profile['is_active'] else "❌ (غیرفعال)"
-        text = f"🧬 **مدیریت پروفایل: {profile['name']}**\n\nوضعیت: {status_emoji}"
-        
-        keyboard = inline_keyboards.get_single_profile_management_menu(profile_id, profile['is_active'])
-        _show_menu(admin_id, text, keyboard, message)
-
-    # تابع جدید برای مدیریت حذف پروفایل
     def confirm_delete_profile(call, profile_id):
-        admin_id = call.from_user.id
-        message = call.message
-
+        """حذف یک پروفایل را مدیریت می‌کند."""
         if _db_manager.delete_profile(profile_id):
-            # --- اینجا باگ برطرف شده است ---
             _bot.answer_callback_query(call.id, "پروفایل با موفقیت حذف شد.")
-            # --------------------------------
-            show_profiles_list(admin_id, message) # نمایش مجدد لیست پروفایل‌ها
+            list_profiles_for_management(call.from_user.id, call.message)
         else:
             _bot.answer_callback_query(call.id, "خطا در حذف پروفایل!", show_alert=True)
-        # تابع جدید برای تغییر وضعیت پروفایل
+
     def toggle_profile_status(call, profile_id):
-        admin_id = call.from_user.id
-
+        """وضعیت فعال/غیرفعال بودن پروفایل را تغییر می‌دهد."""
         profile = _db_manager.get_profile_by_id(profile_id)
-        if not profile:
-            _bot.answer_callback_query(call.id, "خطا: پروفایل یافت نشد.", show_alert=True)
-            return
-
+        if not profile: return
         new_status = not profile['is_active']
         if _db_manager.update_profile_status(profile_id, new_status):
-            # --- اینجا باگ برطرف شده است ---
             _bot.answer_callback_query(call.id, "وضعیت پروفایل تغییر کرد.")
-            # --------------------------------
-            show_single_profile_menu(admin_id, call.message, profile_id)
+            view_single_profile_menu(call.from_user.id, call.message, profile_id)
         else:
             _bot.answer_callback_query(call.id, "خطا در تغییر وضعیت!", show_alert=True)
-            
-            
-            
-            
+
     def start_manage_profile_inbounds_flow(call, profile_id):
+        """فرآیند انتخاب سرور برای مدیریت اینباندهای پروفایل را آغاز می‌کند."""
         servers = _db_manager.get_all_servers()
         if not servers:
             _bot.answer_callback_query(call.id, "ابتدا باید حداقل یک سرور اضافه کنید.", show_alert=True)
             return
-        
-        text = "لطفاً سروری که می‌خواهید اینباندهای آن را به پروفایل اضافه کنید، انتخاب نمایید:"
+        text = "لطفاً سروری که می‌خواهید اینباندهای آن را به پروفایل اضافه/حذف کنید، انتخاب نمایید:"
         keyboard = inline_keyboards.get_server_selection_for_profile_menu(profile_id, servers)
         _show_menu(call.from_user.id, text, keyboard, call.message)
-        
-        
-        
+
     def show_profile_inbounds_for_server(call, profile_id, server_id):
-        admin_id = call.from_user.id
-        message = call.message
-        
+        """منوی چندانتخابی اینباندها را برای یک پروفایل و سرور خاص نمایش می‌دهد."""
+        admin_id, message = call.from_user.id, call.message
         server = _db_manager.get_server_by_id(server_id)
-        if not server:
-            # ... (کد خطا مثل قبل)
-            return
+        if not server: _bot.answer_callback_query(call.id, "سرور یافت نشد.", show_alert=True); return
 
         _bot.edit_message_text("⏳ در حال دریافت لیست اینباندها...", admin_id, message.message_id)
-
-        api_client = XuiAPIClient(panel_url=server['panel_url'], username=server['username'], password=server['password'])
+        api_client = _xui_api(panel_url=server['panel_url'], username=server['username'], password=server['password'])
+        if not api_client.login(): _bot.edit_message_text("❌ اتصال به پنل سرور ناموفق بود.", admin_id, message.message_id); return
         
-        if not api_client.login():
-            # ... (کد خطا مثل قبل)
-            return
-            
-        panel_inbounds = api_client.get_inbound()
-        api_client.logout()
+        panel_inbounds = api_client.list_inbounds()
+        if not panel_inbounds: _bot.edit_message_text("هیچ اینباندی در پنل این سرور یافت نشد.", admin_id, message.message_id); return
 
-        if panel_inbounds is None or not panel_inbounds:
-            # ... (کد خطا مثل قبل)
-            return
-
-        # --- بخش جدید و کلیدی ---
-        # 1. گرفتن اینباندهایی که از قبل برای این پروفایل انتخاب شده‌اند
-        selected_db_ids = _db_manager.get_profile_inbounds(profile_id)
+        selected_db_ids = set(_db_manager.get_profile_inbounds(profile_id))
+        inbound_map = _db_manager.get_server_inbounds_map(server_id)
         
-        # 2. ذخیره کردن وضعیت فعلی در حافظه موقت ربات (state)
         _admin_states[admin_id] = {
-            'state': 'selecting_profile_inbounds',
-            'profile_id': profile_id,
-            'server_id': server_id,
-            'selected_ids': set(selected_db_ids) # استفاده از set برای سرعت بیشتر
+            'state': 'selecting_profile_inbounds', 'profile_id': profile_id,
+            'server_id': server_id, 'selected_ids': selected_db_ids, 'inbound_map': inbound_map
         }
         
-        # 3. گرفتن نقشه بین ID پنل و ID دیتابیس
-        inbound_map = _db_manager.get_server_inbounds_map(server_id)
-        # --- پایان بخش جدید ---
-
         profile = _db_manager.get_profile_by_id(profile_id)
         text = f"🧬 **پروفایل:** {profile['name']}\n**سرور:** {server['name']}\n\nلطفاً اینباندهای مورد نظر را انتخاب کنید:"
-        
         keyboard = inline_keyboards.get_profile_inbound_selection_menu(profile_id, server_id, panel_inbounds, selected_db_ids, inbound_map)
         _bot.edit_message_text(text, admin_id, message.message_id, reply_markup=keyboard, parse_mode='Markdown')
-        
-        
+
     def handle_toggle_profile_inbound(call, profile_id, db_inbound_id):
         admin_id = call.from_user.id
         state_data = _admin_states.get(admin_id)
-
-        # اگر state وجود نداشت یا برای پروفایل دیگری بود، کاری نکن
         if not state_data or state_data.get('state') != 'selecting_profile_inbounds' or state_data.get('profile_id') != profile_id:
-            _bot.answer_callback_query(call.id, "خطا: لطفاً فرآیند را مجدداً شروع کنید.", show_alert=True)
-            return
-            
+            _bot.answer_callback_query(call.id, "خطا: لطفاً فرآیند را مجدداً شروع کنید.", show_alert=True); return
+        
         selected_ids = state_data['selected_ids']
         if db_inbound_id in selected_ids:
             selected_ids.remove(db_inbound_id)
         else:
             selected_ids.add(db_inbound_id)
-            
-        # ویرایش کیبورد با وضعیت جدید بدون تماس مجدد با API
-        # (این بخش نیازمند بازسازی کامل پیام است، پس از همان تابع قبلی استفاده میکنیم)
+        
         _bot.answer_callback_query(call.id)
         show_profile_inbounds_for_server(call, profile_id, state_data['server_id'])
-
 
     def save_profile_inbounds(call, profile_id):
         admin_id = call.from_user.id
         state_data = _admin_states.get(admin_id)
-
         if not state_data or state_data.get('state') != 'selecting_profile_inbounds' or state_data.get('profile_id') != profile_id:
-            _bot.answer_callback_query(call.id, "خطا: اطلاعاتی برای ذخیره یافت نشد.", show_alert=True)
-            return
+            _bot.answer_callback_query(call.id, "خطا: اطلاعاتی برای ذخیره یافت نشد.", show_alert=True); return
 
         final_selected_ids = list(state_data['selected_ids'])
         if _db_manager.update_profile_inbounds(profile_id, final_selected_ids):
             _bot.answer_callback_query(call.id, "✅ تغییرات با موفقیت ذخیره شد.")
             _clear_admin_state(admin_id)
-            # بازگشت به منوی مدیریت پروفایل
-            show_single_profile_menu(admin_id, call.message, profile_id)
+            view_single_profile_menu(admin_id, call.message, profile_id)
         else:
             _bot.answer_callback_query(call.id, "❌ خطا در ذخیره تغییرات!", show_alert=True)

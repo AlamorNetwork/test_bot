@@ -212,60 +212,33 @@ def get_gateway_type_selection_menu():
 
 
 def get_profile_management_menu():
-    """منوی اصلی بخش مدیریت پروفایل‌ها را نمایش می‌دهد."""
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(
         types.InlineKeyboardButton("➕ ساخت پروفایل جدید", callback_data="admin_add_profile"),
-        types.InlineKeyboardButton("📝 مدیریت اینباندهای پروفایل", callback_data="admin_manage_profile_inbounds"),
-        types.InlineKeyboardButton("📋 لیست پروفایل‌ها", callback_data="admin_list_profiles"),
+        types.InlineKeyboardButton("📋 لیست و مدیریت پروفایل‌ها", callback_data="admin_list_profiles"),
         types.InlineKeyboardButton("🔙 بازگشت به منو اصلی", callback_data="admin_main_menu")
     )
     return markup
 
 def get_profiles_list_menu(profiles, action_prefix: str):
-    """
-    لیستی از پروفایل‌ها را برای یک عمل خاص (مانند مشاهده یا حذف) نمایش می‌دهد.
-    action_prefix: پیشوندی که مشخص می‌کند با کلیک روی دکمه چه اتفاقی بیفتد.
-    """
     markup = types.InlineKeyboardMarkup(row_width=1)
     for profile in profiles:
         status = "✅" if profile['is_active'] else "❌"
-        markup.add(types.InlineKeyboardButton(
-            f"{status} {profile['name']}",
-            callback_data=f"{action_prefix}_{profile['id']}"
-        ))
+        markup.add(types.InlineKeyboardButton(f"{status} {profile['name']}", callback_data=f"{action_prefix}_{profile['id']}"))
     markup.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin_profile_management"))
     return markup
 
-
-
-
-
 def get_single_profile_management_menu(profile_id, is_active):
-    """
-    منوی مدیریت برای یک پروفایل خاص را ایجاد می‌کند.
-    """
-    # --- کد اصلاح شده ---
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-
-    # دکمه تغییر وضعیت بر اساس وضعیت فعلی پروفایل
-    status_text = "🟢 فعال کردن" if not is_active else "🔴 غیرفعال کردن"
-    status_callback = f"admin_toggle_profile_{profile_id}"
-
-    manage_inbounds_button = types.InlineKeyboardButton("مدیریت اینباندها 🔗", callback_data=f"admin_manage_profile_inbounds_{profile_id}")
-    toggle_status_button = types.InlineKeyboardButton(status_text, callback_data=status_callback)
-    delete_button = types.InlineKeyboardButton("🗑️ حذف پروفایل", callback_data=f"admin_delete_profile_{profile_id}")
-    back_button = types.InlineKeyboardButton("➡️ بازگشت به لیست", callback_data="admin_list_profiles")
-    # -------------------
-
-    keyboard.add(manage_inbounds_button)
-    keyboard.add(toggle_status_button, delete_button)
-    keyboard.add(back_button)
-    
-    return keyboard
-
-
-
+    """منوی مدیریت برای یک پروفایل خاص را ایجاد می‌کند."""
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    status_text = "🔴 غیرفعال کردن" if is_active else "🟢 فعال کردن"
+    markup.add(types.InlineKeyboardButton("🔗 مدیریت اینباندها", callback_data=f"admin_manage_profile_inbounds_{profile_id}"))
+    markup.add(
+        types.InlineKeyboardButton(status_text, callback_data=f"admin_toggle_profile_status_{profile_id}"),
+        types.InlineKeyboardButton("🗑️ حذف پروفایل", callback_data=f"admin_delete_profile_{profile_id}")
+    )
+    markup.add(types.InlineKeyboardButton("🔙 بازگشت به لیست پروفایل‌ها", callback_data="admin_list_profiles"))
+    return markup
 
 def get_server_selection_for_profile_menu(profile_id, servers):
     """منوی انتخاب سرور برای مدیریت اینباندهای یک پروفایل را می‌سازد."""

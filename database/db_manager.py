@@ -1,4 +1,4 @@
-# database/db_manager.py
+# database/db_manager.py (نسخه نهایی و اصلاح شده)
 
 import sqlite3
 import logging
@@ -23,148 +23,96 @@ class DatabaseManager:
         return conn
 
     def create_tables(self):
-        """
-        جداول لازم را در دیتابیس ایجاد می‌کند اگر وجود نداشته باشند.
-        """
         conn = None
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
+
+            # --- جداول اصلی ---
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id INTEGER UNIQUE NOT NULL,
+                    first_name TEXT, last_name TEXT, username TEXT, is_admin BOOLEAN DEFAULT FALSE,
+                    join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )""")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS servers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL,
+                    panel_url TEXT NOT NULL, username TEXT NOT NULL, password TEXT NOT NULL,
+                    subscription_base_url TEXT NOT NULL, subscription_path_prefix TEXT NOT NULL,
+                    is_active BOOLEAN DEFAULT TRUE, last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_online BOOLEAN DEFAULT FALSE
+                )""")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS plans (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, plan_type TEXT NOT NULL,
+                    volume_gb REAL, duration_days INTEGER, price REAL, per_gb_price REAL,
+                    is_active BOOLEAN DEFAULT TRUE
+                )""")
+            
+            # --- جدول مهمی که جا افتاده بود ---
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS server_inbounds (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    server_id INTEGER NOT NULL,
+                    inbound_id INTEGER NOT NULL, -- ID Inbound در پنل X-UI
+                    protocol TEXT, network TEXT, port INTEGER, remark TEXT,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
+                    UNIQUE (server_id, inbound_id)
+                )""")
+
+            # --- جداول پروفایل‌ها (برای فاز ۲) ---
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS profiles (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT UNIQUE NOT NULL,
-                    description TEXT,
-                    is_active BOOLEAN DEFAULT TRUE
-                )
-            """)
-
-            # جدول ارتباطی پروفایل‌ها و اینباندها (Many-to-Many)
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL,
+                    description TEXT, is_active BOOLEAN DEFAULT TRUE
+                )""")
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS profile_inbounds (
-                    profile_id INTEGER NOT NULL,
-                    server_inbound_id INTEGER NOT NULL,
+                    profile_id INTEGER NOT NULL, server_inbound_id INTEGER NOT NULL,
                     FOREIGN KEY (profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
                     FOREIGN KEY (server_inbound_id) REFERENCES server_inbounds (id) ON DELETE CASCADE,
                     PRIMARY KEY (profile_id, server_inbound_id)
-                )
-            """)
-            # جدول کاربران
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    telegram_id INTEGER UNIQUE NOT NULL,
-                    first_name TEXT,
-                    last_name TEXT,
-                    username TEXT,
-                    is_admin BOOLEAN DEFAULT FALSE,
-                    join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+                )""")
 
-            # جدول سرورها
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS servers (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT UNIQUE NOT NULL,
-                    panel_url TEXT NOT NULL,
-                    username TEXT NOT NULL,
-                    password TEXT NOT NULL,
-                    subscription_base_url TEXT NOT NULL,
-                    subscription_path_prefix TEXT NOT NULL,
-                    is_active BOOLEAN DEFAULT TRUE,
-                    last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    is_online BOOLEAN DEFAULT FALSE
-                )
-            """)
-            
-            # جدول پلن‌ها
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS plans (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT UNIQUE NOT NULL,
-                    plan_type TEXT NOT NULL,
-                    volume_gb REAL,
-                    duration_days INTEGER,
-                    price REAL,
-                    per_gb_price REAL,
-                    is_active BOOLEAN DEFAULT TRUE
-                )
-            """)
-            
-            # جدول Inboundهای پیکربندی شده برای هر سرور
-
-            # جدول خریدها
+            # --- جداول خرید و پرداخت ---
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS purchases (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    server_id INTEGER NOT NULL,
-                    plan_id INTEGER,
-                    purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    expire_date TIMESTAMP,
-                    initial_volume_gb REAL NOT NULL,
-                    xui_client_uuid TEXT,
-                    xui_client_email TEXT,
-                    subscription_id TEXT,
-                    is_active BOOLEAN DEFAULT TRUE,
-                    single_configs_json TEXT,
-                    FOREIGN KEY (user_id) REFERENCES users (id),
-                    FOREIGN KEY (server_id) REFERENCES servers (id),
-                    FOREIGN KEY (plan_id) REFERENCES plans (id)
-                )
-            """)
-
-            # جدول درگاه‌های پرداخت
-            cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS payment_gateways (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT UNIQUE NOT NULL,
-                        type TEXT NOT NULL,
-                        card_number TEXT,
-                        card_holder_name TEXT,
-                        merchant_id TEXT,
-                        description TEXT,
-                        is_active BOOLEAN DEFAULT TRUE,
-                        priority INTEGER DEFAULT 0
-                    )
-                """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS free_test_usage (
-                    user_id INTEGER PRIMARY KEY,
-                    usage_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-                )
-            """)
-                
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+                    purchase_type TEXT NOT NULL DEFAULT 'server', server_id INTEGER, profile_id INTEGER,
+                    plan_id INTEGER, purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expire_date TIMESTAMP, initial_volume_gb REAL NOT NULL,
+                    subscription_id TEXT UNIQUE, full_configs_json TEXT, is_active BOOLEAN DEFAULT TRUE,
+                    FOREIGN KEY (user_id) REFERENCES users (id), FOREIGN KEY (server_id) REFERENCES servers (id),
+                    FOREIGN KEY (profile_id) REFERENCES profiles (id), FOREIGN KEY (plan_id) REFERENCES plans (id)
+                )""")
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS payments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    amount REAL NOT NULL,
-                    payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    receipt_message_id INTEGER,
-                    is_confirmed BOOLEAN DEFAULT FALSE,
-                    admin_confirmed_by INTEGER,
-                    confirmation_date TIMESTAMP,
-                    order_details_json TEXT,
-                    admin_notification_message_id INTEGER,
-                    authority TEXT,
-                    ref_id TEXT,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL,
+                    payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, receipt_message_id INTEGER,
+                    is_confirmed BOOLEAN DEFAULT FALSE, admin_confirmed_by INTEGER, confirmation_date TIMESTAMP,
+                    order_details_json TEXT, admin_notification_message_id INTEGER, authority TEXT, ref_id TEXT,
                     FOREIGN KEY (user_id) REFERENCES users (id)
-                )
-            """)
-
+                )""")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS payment_gateways (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, type TEXT NOT NULL,
+                    card_number TEXT, card_holder_name TEXT, merchant_id TEXT, description TEXT,
+                    is_active BOOLEAN DEFAULT TRUE, priority INTEGER DEFAULT 0
+                )""")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS free_test_usage (
+                    user_id INTEGER PRIMARY KEY, usage_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                )""")
 
             conn.commit()
-            logger.info("Database tables created or already exist.")
+            logger.info("Database tables, including profile tables, created/checked successfully.")
         except sqlite3.Error as e:
-            logger.error(f"Error creating tables: {e}")
-            raise e
+            logger.error(f"Error creating tables: {e}"); raise e
         finally:
-            if conn:
-                conn.close()
+            if conn: conn.close()
 
     def _encrypt(self, data):
         if data is None: return None
@@ -925,3 +873,6 @@ class DatabaseManager:
         inbounds = self.get_server_inbounds(server_id, only_active=False) # همه اینباندها را میگیریم
         inbound_map = {inbound['inbound_id']: inbound['id'] for inbound in inbounds}
         return inbound_map
+    
+    
+    
