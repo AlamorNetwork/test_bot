@@ -871,26 +871,31 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         _show_menu(admin_id, text, keyboard, message)
 
     # تابع جدید برای مدیریت حذف پروفایل
-    def confirm_delete_profile(admin_id, message, profile_id):
-        # اینجا می‌توان یک مرحله تایید هم اضافه کرد، اما فعلا مستقیم حذف می‌کنیم
+    def confirm_delete_profile(call, profile_id):
+        admin_id = call.from_user.id
+        message = call.message
+
         if _db_manager.delete_profile(profile_id):
-            _bot.answer_callback_query(message.id, "پروفایل با موفقیت حذف شد.")
             # --- اینجا باگ برطرف شده است ---
-            show_profiles_list(admin_id, message) # فراخوانی تابع با آرگومان‌های صحیح
+            _bot.answer_callback_query(call.id, "پروفایل با موفقیت حذف شد.")
             # --------------------------------
+            show_profiles_list(admin_id, message) # نمایش مجدد لیست پروفایل‌ها
         else:
-            _bot.answer_callback_query(message.id, "خطا در حذف پروفایل!", show_alert=True)
-    # تابع جدید برای تغییر وضعیت پروفایل
-    def toggle_profile_status(admin_id, message, profile_id):
+            _bot.answer_callback_query(call.id, "خطا در حذف پروفایل!", show_alert=True)
+        # تابع جدید برای تغییر وضعیت پروفایل
+    def toggle_profile_status(call, profile_id):
+        admin_id = call.from_user.id
+
         profile = _db_manager.get_profile_by_id(profile_id)
         if not profile:
-            _bot.answer_callback_query(message.id, "خطا: پروفایل یافت نشد.", show_alert=True)
+            _bot.answer_callback_query(call.id, "خطا: پروفایل یافت نشد.", show_alert=True)
             return
 
         new_status = not profile['is_active']
         if _db_manager.update_profile_status(profile_id, new_status):
-            _bot.answer_callback_query(message.id, f"وضعیت پروفایل تغییر کرد.")
-            # نمایش مجدد همین منو با وضعیت جدید
-            show_single_profile_menu(admin_id, message, profile_id)
+            # --- اینجا باگ برطرف شده است ---
+            _bot.answer_callback_query(call.id, "وضعیت پروفایل تغییر کرد.")
+            # --------------------------------
+            show_single_profile_menu(admin_id, call.message, profile_id)
         else:
-            _bot.answer_callback_query(message.id, "خطا در تغییر وضعیت!", show_alert=True)
+            _bot.answer_callback_query(call.id, "خطا در تغییر وضعیت!", show_alert=True)
