@@ -766,18 +766,16 @@ class DatabaseManager:
     def add_profile(self, name, description=""):
         """
         یک پروفایل جدید به دیتابیس اضافه می‌کند.
+        (نسخه اصلاح شده با استفاده از اتصال موجود)
         """
-        conn = self.create_connection()
-        cursor = conn.cursor()
+        cursor = self.conn.cursor() # <--- تغییر اصلی: استفاده از self.conn
         try:
-            # اگر از PostgreSQL استفاده می‌کنید کد شما متفاوت خواهد بود
             cursor.execute("INSERT INTO profiles (name, description) VALUES (?, ?)", (name, description))
-            conn.commit()
+            self.conn.commit() # <--- تغییر اصلی: استفاده از self.conn
             return cursor.lastrowid
-        except Exception: # بهتر است نوع خطا مشخص باشد
+        except Exception as e:
+            print(f"Error in add_profile: {e}") # لاگ کردن خطا برای دیباگ بهتر
             return None
-        finally:
-            conn.close()
 
     def set_payment_authority(self, payment_id: int, authority: str):
         """شناسه authority را برای یک رکورد پرداخت ثبت می‌کند."""
