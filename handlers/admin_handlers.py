@@ -901,19 +901,54 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         _bot.edit_message_text(text, admin_id, message.message_id, reply_markup=keyboard, parse_mode='Markdown')
 
     def handle_toggle_profile_inbound(call, profile_id, db_inbound_id):
+        """
+        وضعیت تیک خوردن یک اینباند را در حافظه موقت تغییر داده و فقط کیبورد را به‌روز می‌کند.
+        """
         admin_id = call.from_user.id
         state_data = _admin_states.get(admin_id)
+
+        # بررسی صحت وضعیت فعلی
         if not state_data or state_data.get('state') != 'selecting_profile_inbounds' or state_data.get('profile_id') != profile_id:
-            _bot.answer_callback_query(call.id, "خطا: لطفاً فرآیند را مجدداً شروع کنید.", show_alert=True); return
-        
+            _bot.answer_callback_query(call.id, "خطا: لطفاً فرآیند را مجدداً شروع کنید.", show_alert=True)
+            return
+            
         selected_ids = state_data['selected_ids']
+        
+        # تغییر وضعیت تیک در حافظه
         if db_inbound_id in selected_ids:
             selected_ids.remove(db_inbound_id)
         else:
             selected_ids.add(db_inbound_id)
+            
+        # --- بخش اصلی اصلاح شده ---
+        # به جای فراخوانی مجدد کل تابع، فقط کیبورد را با اطلاعات موجود بازسازی و ویرایش می‌کنیم
         
-        _bot.answer_callback_query(call.id)
-        show_profile_inbounds_for_server(call, profile_id, state_data['server_id'])
+        panel_inbounds = state_data.get('panel_inbounds', [])
+        inbound_map = state_data.get('inbound_map', {})
+        server_id = state_data.get('server_id')
+
+        # ساخت کیبورد جدید با وضعیت به‌روز شده
+        new_keyboard = inline_keyboards.get_profile_inbound_selection_menu(
+            profile_id,
+            server_id,
+            panel_inbounds,
+            list(selected_ids), # تبدیل set به list برای تابع کیبورد
+            inbound_map
+        )
+        
+        # فقط کیبورد پیام را ویرایش می‌کنیم
+        try:
+            _bot.edit_message_reply_markup(
+                chat_id=admin_id,
+                message_id=call.message.message_id,
+                reply_markup=new_keyboard
+            )
+            _bot.answer_callback_query(call.id) # ارسال یک پاسخ خالی برای حذف "loading"
+        except telebot.apihelper.ApiTelegramException as e:
+            if 'message is not modified' not in e.description:
+                logger.error(f"Error updating profile inbound keyboard: {e}")
+                _bot.answer_callback_query(call.id, "خطا در به‌روزرسانی کیبورد.")
+        # --- پایان بخش اصلاح شده ---
 
     def save_profile_inbounds(call, profile_id):
         admin_id = call.from_user.id
