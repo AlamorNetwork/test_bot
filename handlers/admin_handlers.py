@@ -963,7 +963,7 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
 
         _bot.edit_message_text("⏳ در حال دریافت لیست اینباندها...", admin_id, message.message_id)
 
-        api_client = XuiApiClient(panel_url=server['panel_url'], username=server['username'], password=server['password'])
+        api_client = XuiAPIClient(panel_url=server['panel_url'], username=server['username'], password=server['password'])
         
         if not api_client.login():
             # ... (کد خطا مثل قبل)
