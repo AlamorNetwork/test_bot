@@ -766,16 +766,25 @@ class DatabaseManager:
     def add_profile(self, name, description=""):
         """
         یک پروفایل جدید به دیتابیس اضافه می‌کند.
-        (نسخه اصلاح شده با استفاده از اتصال موجود)
+        (نسخه نهایی و هماهنگ با ساختار پروژه)
         """
-        cursor = self.conn.cursor() # <--- تغییر اصلی: استفاده از self.conn
+        conn = None  # <--- مانند سایر توابع
         try:
+            conn = self._get_connection()  # <--- گرفتن اتصال جدید
+            cursor = conn.cursor()
             cursor.execute("INSERT INTO profiles (name, description) VALUES (?, ?)", (name, description))
-            self.conn.commit() # <--- تغییر اصلی: استفاده از self.conn
+            conn.commit()
+            logger.info(f"Profile '{name}' added successfully.")
             return cursor.lastrowid
-        except Exception as e:
-            print(f"Error in add_profile: {e}") # لاگ کردن خطا برای دیباگ بهتر
+        except sqlite3.IntegrityError:
+            logger.warning(f"Profile with name '{name}' already exists.")
             return None
+        except sqlite3.Error as e:
+            logger.error(f"Error adding profile '{name}': {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()  # <--- بستن اتصال
 
     def set_payment_authority(self, payment_id: int, authority: str):
         """شناسه authority را برای یک رکورد پرداخت ثبت می‌کند."""
