@@ -762,8 +762,23 @@ class DatabaseManager:
         finally:
             if conn: conn.close()
             
-            
-            
+
+    def add_profile(self, name, description=""):
+        """
+        یک پروفایل جدید به دیتابیس اضافه می‌کند.
+        """
+        conn = self.create_connection()
+        cursor = conn.cursor()
+        try:
+            # اگر از PostgreSQL استفاده می‌کنید کد شما متفاوت خواهد بود
+            cursor.execute("INSERT INTO profiles (name, description) VALUES (?, ?)", (name, description))
+            conn.commit()
+            return cursor.lastrowid
+        except Exception: # بهتر است نوع خطا مشخص باشد
+            return None
+        finally:
+            conn.close()
+
     def set_payment_authority(self, payment_id: int, authority: str):
         """شناسه authority را برای یک رکورد پرداخت ثبت می‌کند."""
         conn = None
