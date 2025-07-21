@@ -969,7 +969,7 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             # ... (کد خطا مثل قبل)
             return
             
-        panel_inbounds = api_client.get_inbounds()
+        panel_inbounds = api_client.get_inbound()
         api_client.logout()
 
         if panel_inbounds is None or not panel_inbounds:
