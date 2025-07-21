@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# AlamorVPN Bot Professional Installer & Manager v5.2 (Final Stable)
+# AlamorVPN Bot Professional Installer & Manager v6.0 (with PostgreSQL)
 # ==============================================================================
 
 # --- Color Codes for better UI ---
@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # --- Variables ---
-REPO_URL="https://github.com/AlamorNetwork/AlamorVPN_Bot.git"
+REPO_URL="git@github.com:AlamorNetwork/Test_Bot_Alamalor.git"
 PROJECT_NAME="AlamorVPN_Bot"
 INSTALL_DIR="/var/www/alamorvpn_bot"
 BOT_SERVICE_NAME="alamorbot.service"
@@ -32,6 +32,27 @@ check_root() {
 }
 
 # --- Main Logic Functions ---
+setup_database() {
+    print_info "--- Starting PostgreSQL Database Setup ---"
+    read -p "$(echo -e ${YELLOW}"Please enter a name for the new database (e.g., alamor_db): "${NC})" db_name
+    read -p "$(echo -e ${YELLOW}"Please enter a username for the database (e.g., alamor_user): "${NC})" db_user
+    read -p "$(echo -e ${YELLOW}"Please enter a secure password for the database user: "${NC})" db_password
+
+    # Create the PostgreSQL user and database
+    sudo -u postgres psql -c "CREATE DATABASE $db_name;"
+    sudo -u postgres psql -c "CREATE USER $db_user WITH PASSWORD '$db_password';"
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $db_name TO $db_user;"
+    
+    # Save credentials to the .env file
+    echo -e "\n# --- PostgreSQL Database Settings ---" >> .env
+    echo "DB_NAME=\"$db_name\"" >> .env
+    echo "DB_USER=\"$db_user\"" >> .env
+    echo "DB_PASSWORD=\"$db_password\"" >> .env
+    echo "DB_HOST=\"localhost\"" >> .env
+    echo "DB_PORT=\"5432\"" >> .env
+    
+    print_success "PostgreSQL database and user created successfully."
+}
 
 install_bot() {
     check_root
@@ -39,8 +60,8 @@ install_bot() {
     cd /root || { print_error "Cannot change to /root directory. Aborting."; exit 1; }
 
     if [ -d "$INSTALL_DIR" ]; then
-        print_warning "Project directory already exists at $INSTALL_DIR."
-        read -p "Do you want to remove it and reinstall? (This will delete all data) (y/n): " confirm_reinstall
+        print_warning "Project directory already exists. Reinstalling will delete all data."
+        read -p "Are you sure you want to continue? (y/n): " confirm_reinstall
         if [[ "$confirm_reinstall" == "y" ]]; then
             remove_bot_internal
         else
@@ -49,34 +70,35 @@ install_bot() {
     fi
 
     print_info "Step 1: Updating system and installing prerequisites..."
-    apt-get update && apt-get install -y python3 python3-pip python3.10-venv git zip nginx certbot python3-certbot-nginx
+    apt-get update && apt-get install -y python3 python3-pip python3.10-venv git zip nginx certbot postgresql postgresql-contrib
     if [ $? -ne 0 ]; then print_error "Failed to install system dependencies. Aborting."; exit 1; fi
 
-    print_info "Step 2: Cloning the project repository from GitHub..."
-    git clone "$REPO_URL" "$INSTALL_DIR"
-    if [ $? -ne 0 ]; then print_error "Failed to clone the repository. Aborting."; exit 1; fi
-    
-    cd "$INSTALL_DIR" || { print_error "Failed to cd into project directory. Aborting."; exit 1; }
-    
-    local VENV_PATH="$INSTALL_DIR/.venv"
-    local PYTHON_EXEC="$VENV_PATH/bin/python3"
+    sudo systemctl start postgresql
+    sudo systemctl enable postgresql
 
-    print_info "Step 3: Creating virtual environment and installing Python libraries..."
+    print_info "Step 2: Cloning the project repository..."
+    git clone "$REPO_URL" "$INSTALL_DIR"
+    cd "$INSTALL_DIR" || exit 1
+    
+    print_info "Step 3: Setting up Python environment..."
     python3 -m venv .venv
-    $PYTHON_EXEC -m pip install --upgrade pip
-    $PYTHON_EXEC -m pip install -r requirements.txt
+    source .venv/bin/activate
+    pip install --upgrade pip
+    pip install -r requirements.txt
     
     print_info "Step 4: Configuring main bot variables..."
     setup_env_file
     
-    print_info "Step 5: Configuring domain and payment gateway..."
+    print_info "Step 5: Configuring PostgreSQL Database..."
+    setup_database
+
+    print_info "Step 6: Configuring domain and payment gateway..."
     setup_ssl_and_nginx
     
-    print_info "Step 6: Setting up persistent services..."
+    print_info "Step 7: Setting up persistent services..."
     setup_services
     
-    print_success "Installation complete! Your bot is now running as a persistent service."
-    print_info "To manage the bot, cd to $INSTALL_DIR and run 'sudo ./install.sh <command>'."
+    print_success "Installation complete!"
 }
 setup_env_file() {
     local PYTHON_EXEC="$INSTALL_DIR/.venv/bin/python3"

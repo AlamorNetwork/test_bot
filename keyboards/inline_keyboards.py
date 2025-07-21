@@ -14,6 +14,7 @@ def get_admin_main_inline_menu():
         types.InlineKeyboardButton("💰 مدیریت پلن‌ها", callback_data="admin_plan_management"),
         types.InlineKeyboardButton("💳 مدیریت درگاه‌ها", callback_data="admin_payment_management"),
         types.InlineKeyboardButton("👥 مدیریت کاربران", callback_data="admin_user_management"),
+        types.InlineKeyboardButton("🧬 مدیریت پروفایل‌ها", callback_data="admin_profile_management"),
         types.InlineKeyboardButton("📊 داشبورد", callback_data="admin_dashboard"),
         types.InlineKeyboardButton("🗄 تهیه نسخه پشتیبان", callback_data="admin_create_backup")
     )
@@ -194,7 +195,6 @@ def get_my_services_menu(purchases: list):
 
 
 
-# در فایل keyboards/inline_keyboards.py
 
 def get_my_services_menu(purchases: list):
     markup = types.InlineKeyboardMarkup(row_width=1)
@@ -219,4 +219,34 @@ def get_gateway_type_selection_menu():
         types.InlineKeyboardButton("🟢 زرین‌پال", callback_data="gateway_type_zarinpal")
     )
     markup.add(types.InlineKeyboardButton("🔙 انصراف", callback_data="admin_payment_management"))
+    return markup
+
+
+
+
+
+def get_profile_management_menu():
+    """منوی اصلی بخش مدیریت پروفایل‌ها را نمایش می‌دهد."""
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton("➕ ساخت پروفایل جدید", callback_data="admin_add_profile"),
+        types.InlineKeyboardButton("📝 مدیریت اینباندهای پروفایل", callback_data="admin_manage_profile_inbounds"),
+        types.InlineKeyboardButton("📋 لیست پروفایل‌ها", callback_data="admin_list_profiles"),
+        types.InlineKeyboardButton("🔙 بازگشت به منو اصلی", callback_data="admin_main_menu")
+    )
+    return markup
+
+def get_profiles_list_menu(profiles, action_prefix: str):
+    """
+    لیستی از پروفایل‌ها را برای یک عمل خاص (مانند مشاهده یا حذف) نمایش می‌دهد.
+    action_prefix: پیشوندی که مشخص می‌کند با کلیک روی دکمه چه اتفاقی بیفتد.
+    """
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for profile in profiles:
+        status = "✅" if profile['is_active'] else "❌"
+        markup.add(types.InlineKeyboardButton(
+            f"{status} {profile['name']}",
+            callback_data=f"{action_prefix}_{profile['id']}"
+        ))
+    markup.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="admin_profile_management"))
     return markup
