@@ -70,13 +70,6 @@ def get_plan_type_selection_menu_admin():
     )
     return markup
     
-def get_gateway_type_selection_menu():
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(
-        types.InlineKeyboardButton("💳 کارت به کارت", callback_data="gateway_type_card_to_card"),
-        types.InlineKeyboardButton("🔙 انصراف", callback_data="admin_payment_management")
-    )
-    return markup
     
 def get_inbound_selection_menu(server_id: int, panel_inbounds: list, active_inbound_ids: list):
     """
@@ -184,14 +177,7 @@ def get_single_configs_button(purchase_id: int):
     markup.add(types.InlineKeyboardButton("📄 دریافت کانفیگ‌های تکی", callback_data=f"user_get_single_configs_{purchase_id}"))
     return markup
 
-def get_my_services_menu(purchases: list):
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    for purchase in purchases:
-        status = "فعال ✅" if purchase['is_active'] else "غیرفعال ❌"
-        btn_text = f"سرویس {purchase['id']} ({purchase['server_name']}) - {status}"
-        markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"user_service_details_{purchase['id']}"))
-    markup.add(get_back_button("user_main_menu").keyboard[0][0])
-    return markup
+
 
 
 
