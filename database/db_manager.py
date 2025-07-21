@@ -915,3 +915,13 @@ class DatabaseManager:
         finally:
             if conn:
                 conn.close()
+                
+                
+    def get_server_inbounds_map(self, server_id):
+        """
+        یک دیکشنری برای مپ کردن ID اینباند پنل به ID دیتابیس برمیگرداند.
+        {panel_inbound_id: db_inbound_id}
+        """
+        inbounds = self.get_server_inbounds(server_id, only_active=False) # همه اینباندها را میگیریم
+        inbound_map = {inbound['inbound_id']: inbound['id'] for inbound in inbounds}
+        return inbound_map

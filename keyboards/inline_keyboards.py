@@ -278,3 +278,35 @@ def get_server_selection_for_profile_menu(profile_id, servers):
     # دکمه بازگشت به منوی مدیریت پروفایل تکی
     markup.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=f"admin_view_profile_{profile_id}"))
     return markup
+
+
+
+def get_profile_inbound_selection_menu(profile_id, server_id, panel_inbounds, selected_db_ids, inbound_map):
+    """
+    منوی انتخاب اینباندها برای یک پروفایل خاص را با وضعیت صحیح نمایش می‌دهد.
+    """
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    
+    for inbound in panel_inbounds:
+        panel_inbound_id = inbound.get('id')
+        db_inbound_id = inbound_map.get(panel_inbound_id)
+        
+        # اگر اینباند در دیتابیس ما برای این سرور ثبت نشده باشد، آن را نادیده میگیریم
+        if db_inbound_id is None:
+            continue
+
+        is_selected = db_inbound_id in selected_db_ids
+        emoji = "✅" if is_selected else "⬜️"
+        
+        button_text = f"{emoji} {inbound.get('remark', f'Inbound {panel_inbound_id}')}"
+        
+        # در callback_data، آیدی پروفایل و آیدی اینباند در دیتابیس را ذخیره می‌کنیم
+        callback_data = f"admin_profile_toggle_inbound_{profile_id}_{db_inbound_id}"
+        
+        markup.add(types.InlineKeyboardButton(button_text, callback_data=callback_data))
+        
+    markup.add(
+        types.InlineKeyboardButton("✔️ ثبت نهایی تغییرات", callback_data=f"admin_profile_save_inbounds_{profile_id}"),
+        types.InlineKeyboardButton("🔙 بازگشت به انتخاب سرور", callback_data=f"admin_manage_profile_inbounds_{profile_id}")
+    )
+    return markup

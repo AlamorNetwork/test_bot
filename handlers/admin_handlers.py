@@ -14,7 +14,6 @@ from utils import messages, helpers
 from keyboards import inline_keyboards
 from utils.config_generator import ConfigGenerator
 from utils.bot_helpers import send_subscription_info # این ایمپورت جدید است
-
 logger = logging.getLogger(__name__)
 
 # ماژول‌های سراسری
@@ -394,6 +393,33 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         elif data.startswith("admin_manage_profile_inbounds_"):
             profile_id = int(data.split('_')[-1])
             start_manage_profile_inbounds_flow(call, profile_id)
+        elif data.startswith("admin_manage_profile_inbounds_"):
+            profile_id = int(data.split('_')[-1])
+            start_manage_profile_inbounds_flow(call, profile_id)
+            
+        # --- بخش جدید ---
+        elif data.startswith("admin_profile_inbounds_select_server_"):
+            parts = data.split('_')
+            profile_id = int(parts[-2])
+            server_id = int(parts[-1])
+            show_profile_inbounds_for_server(call, profile_id, server_id)
+        elif data.startswith("admin_profile_inbounds_select_server_"):
+            parts = data.split('_')
+            profile_id = int(parts[-2])
+            server_id = int(parts[-1])
+            show_profile_inbounds_for_server(call, profile_id, server_id)
+            
+        # --- بخش جدید ---
+        elif data.startswith("admin_profile_toggle_inbound_"):
+            parts = data.split('_')
+            profile_id = int(parts[-2])
+            db_inbound_id = int(parts[-1])
+            handle_toggle_profile_inbound(call, profile_id, db_inbound_id)
+
+        elif data.startswith("admin_profile_save_inbounds_"):
+            profile_id = int(data.split('_')[-1])
+            save_profile_inbounds(call, profile_id)
+    # -----------------
     # -----------------
     # -------------------------
     # ---------------------------------------------
@@ -923,3 +949,90 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         text = "لطفاً سروری که می‌خواهید اینباندهای آن را به پروفایل اضافه کنید، انتخاب نمایید:"
         keyboard = inline_keyboards.get_server_selection_for_profile_menu(profile_id, servers)
         _show_menu(call.from_user.id, text, keyboard, call.message)
+        
+        
+        
+    def show_profile_inbounds_for_server(call, profile_id, server_id):
+        admin_id = call.from_user.id
+        message = call.message
+        
+        server = _db_manager.get_server_by_id(server_id)
+        if not server:
+            # ... (کد خطا مثل قبل)
+            return
+
+        _bot.edit_message_text("⏳ در حال دریافت لیست اینباندها...", admin_id, message.message_id)
+
+        api_client = XuiApiClient(panel_url=server['panel_url'], username=server['username'], password=server['password'])
+        
+        if not api_client.login():
+            # ... (کد خطا مثل قبل)
+            return
+            
+        panel_inbounds = api_client.get_inbounds()
+        api_client.logout()
+
+        if panel_inbounds is None or not panel_inbounds:
+            # ... (کد خطا مثل قبل)
+            return
+
+        # --- بخش جدید و کلیدی ---
+        # 1. گرفتن اینباندهایی که از قبل برای این پروفایل انتخاب شده‌اند
+        selected_db_ids = _db_manager.get_profile_inbounds(profile_id)
+        
+        # 2. ذخیره کردن وضعیت فعلی در حافظه موقت ربات (state)
+        _admin_states[admin_id] = {
+            'state': 'selecting_profile_inbounds',
+            'profile_id': profile_id,
+            'server_id': server_id,
+            'selected_ids': set(selected_db_ids) # استفاده از set برای سرعت بیشتر
+        }
+        
+        # 3. گرفتن نقشه بین ID پنل و ID دیتابیس
+        inbound_map = _db_manager.get_server_inbounds_map(server_id)
+        # --- پایان بخش جدید ---
+
+        profile = _db_manager.get_profile_by_id(profile_id)
+        text = f"🧬 **پروفایل:** {profile['name']}\n**سرور:** {server['name']}\n\nلطفاً اینباندهای مورد نظر را انتخاب کنید:"
+        
+        keyboard = inline_keyboards.get_profile_inbound_selection_menu(profile_id, server_id, panel_inbounds, selected_db_ids, inbound_map)
+        _bot.edit_message_text(text, admin_id, message.message_id, reply_markup=keyboard, parse_mode='Markdown')
+        
+        
+    def handle_toggle_profile_inbound(call, profile_id, db_inbound_id):
+        admin_id = call.from_user.id
+        state_data = _admin_states.get(admin_id)
+
+        # اگر state وجود نداشت یا برای پروفایل دیگری بود، کاری نکن
+        if not state_data or state_data.get('state') != 'selecting_profile_inbounds' or state_data.get('profile_id') != profile_id:
+            _bot.answer_callback_query(call.id, "خطا: لطفاً فرآیند را مجدداً شروع کنید.", show_alert=True)
+            return
+            
+        selected_ids = state_data['selected_ids']
+        if db_inbound_id in selected_ids:
+            selected_ids.remove(db_inbound_id)
+        else:
+            selected_ids.add(db_inbound_id)
+            
+        # ویرایش کیبورد با وضعیت جدید بدون تماس مجدد با API
+        # (این بخش نیازمند بازسازی کامل پیام است، پس از همان تابع قبلی استفاده میکنیم)
+        _bot.answer_callback_query(call.id)
+        show_profile_inbounds_for_server(call, profile_id, state_data['server_id'])
+
+
+    def save_profile_inbounds(call, profile_id):
+        admin_id = call.from_user.id
+        state_data = _admin_states.get(admin_id)
+
+        if not state_data or state_data.get('state') != 'selecting_profile_inbounds' or state_data.get('profile_id') != profile_id:
+            _bot.answer_callback_query(call.id, "خطا: اطلاعاتی برای ذخیره یافت نشد.", show_alert=True)
+            return
+
+        final_selected_ids = list(state_data['selected_ids'])
+        if _db_manager.update_profile_inbounds(profile_id, final_selected_ids):
+            _bot.answer_callback_query(call.id, "✅ تغییرات با موفقیت ذخیره شد.")
+            _clear_admin_state(admin_id)
+            # بازگشت به منوی مدیریت پروفایل
+            show_single_profile_menu(admin_id, call.message, profile_id)
+        else:
+            _bot.answer_callback_query(call.id, "❌ خطا در ذخیره تغییرات!", show_alert=True)
