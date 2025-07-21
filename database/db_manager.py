@@ -30,7 +30,25 @@ class DatabaseManager:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    description TEXT,
+                    is_active BOOLEAN DEFAULT TRUE
+                )
+            """)
 
+            # جدول ارتباطی پروفایل‌ها و اینباندها (Many-to-Many)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS profile_inbounds (
+                    profile_id INTEGER NOT NULL,
+                    server_inbound_id INTEGER NOT NULL,
+                    FOREIGN KEY (profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
+                    FOREIGN KEY (server_inbound_id) REFERENCES server_inbounds (id) ON DELETE CASCADE,
+                    PRIMARY KEY (profile_id, server_inbound_id)
+                )
+            """)
             # جدول کاربران
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -76,17 +94,6 @@ class DatabaseManager:
             """)
             
             # جدول Inboundهای پیکربندی شده برای هر سرور
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS server_inbounds (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    server_id INTEGER NOT NULL,
-                    inbound_id INTEGER NOT NULL,
-                    remark TEXT,
-                    is_active BOOLEAN DEFAULT TRUE,
-                    FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
-                    UNIQUE (server_id, inbound_id)
-                )
-            """)
 
             # جدول خریدها
             cursor.execute("""

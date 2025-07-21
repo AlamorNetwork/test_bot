@@ -58,6 +58,8 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
     def _show_plan_management_menu(admin_id, message=None): _show_menu(admin_id, messages.PLAN_MGMT_MENU_TEXT, inline_keyboards.get_plan_management_inline_menu(), message)
     def _show_payment_gateway_management_menu(admin_id, message=None): _show_menu(admin_id, messages.PAYMENT_GATEWAY_MGMT_MENU_TEXT, inline_keyboards.get_payment_gateway_management_inline_menu(), message)
     def _show_user_management_menu(admin_id, message=None): _show_menu(admin_id, messages.USER_MGMT_MENU_TEXT, inline_keyboards.get_user_management_inline_menu(), message)
+    def _show_profile_management_menu(admin_id, message=None):
+        _show_menu(admin_id, "🧬 **مدیریت پروفایل‌ها**\n\nاز این بخش می‌توانید پروفایل‌های ترکیبی را تعریف و مدیریت کنید.", inline_keyboards.get_profile_management_menu(), message)
 
     # =============================================================================
     # SECTION: Single-Action Functions (Listing, Testing)
@@ -227,6 +229,14 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         elif state == 'waiting_for_gateway_id_to_toggle':
             execute_toggle_gateway_status(admin_id, text)
             
+        elif state == 'waiting_for_gateway_id_to_toggle':
+            execute_toggle_gateway_status(admin_id, text)
+            
+        # --- شرط جدید ---
+        elif state == 'waiting_for_profile_name':
+            process_add_profile_name(admin_id, message)
+        # ------------------
+            
         # --- Inbound Flow ---
         elif state == 'waiting_for_server_id_for_inbounds':
             process_manage_inbounds_flow(admin_id, message)
@@ -340,6 +350,8 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             "admin_list_gateways": list_gateways_action,
             "admin_list_users": list_all_users,
             "admin_manage_inbounds": start_manage_inbounds_flow,
+            "admin_profile_management": _show_profile_management_menu,
+            "admin_add_profile": start_add_profile_flow,
         }
         
         if data in actions:
@@ -782,3 +794,34 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         elif gateway_type == 'card_to_card':
             state_info['state'] = 'waiting_for_card_number'
             _bot.edit_message_text(messages.ADD_GATEWAY_PROMPT_CARD_NUMBER, admin_id, message.message_id)
+            
+            
+            
+            
+            
+    def start_add_profile_flow(admin_id, message):
+        _clear_admin_state(admin_id)
+        # درخواست نام پروفایل از ادمین
+        prompt_message = _bot.edit_message_text(
+            "لطفاً نام پروفایل جدید را وارد کنید:",
+            admin_id,
+            message.message_id
+        )
+        # ثبت مرحله بعدی برای دریافت پاسخ
+        _admin_states[admin_id] = {'state': 'waiting_for_profile_name', 'prompt_message_id': prompt_message.message_id, 'data': {}}
+
+    # تابع جدید برای پردازش نام پروفایل
+    def process_add_profile_name(admin_id, message):
+        profile_name = message.text.strip()
+        
+        # افزودن پروفایل به دیتابیس
+        profile_id = _db_manager.add_profile(profile_name)
+
+        if profile_id:
+            text = f"✅ پروفایل **{profile_name}** با موفقیت ایجاد شد."
+        else:
+            text = f"⚠️ خطایی رخ داد! پروفایلی با نام **{profile_name}** از قبل وجود دارد."
+        
+        _bot.send_message(admin_id, text, parse_mode='Markdown')
+        _clear_admin_state(admin_id)
+        _show_profile_management_menu(admin_id) # نمایش مجدد منوی پروفایل
