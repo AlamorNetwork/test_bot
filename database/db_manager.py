@@ -901,3 +901,29 @@ class DatabaseManager:
         finally:
             if conn:
                 conn.close()
+                
+                
+    def get_inbounds_for_profile(self, profile_id: int):
+        """
+        Retrieves all inbounds associated with a specific profile.
+        """
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            # Join across three tables to get all necessary info
+            cursor.execute("""
+                SELECT si.*, s.name as server_name 
+                FROM profile_inbounds pi
+                JOIN server_inbounds si ON pi.server_inbound_id = si.id
+                JOIN servers s ON si.server_id = s.id
+                WHERE pi.profile_id = ?
+            """, (profile_id,))
+            inbounds = cursor.fetchall()
+            return [dict(i) for i in inbounds]
+        except sqlite3.Error as e:
+            logger.error(f"Error getting inbounds for profile {profile_id}: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
