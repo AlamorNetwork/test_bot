@@ -534,22 +534,22 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
     # در فایل handlers/user_handlers.py
 
     def show_order_summary(user_id, message):
-        """نمایش خلاصه سفارش به کاربر با منطق اصلاح شده برای مدت زمان."""
         _user_states[user_id]['state'] = 'confirming_order'
         order_data = _user_states[user_id]['data']
         
-        server_info = _db_manager.get_server_by_id(order_data['server_id'])
         summary_text = messages.ORDER_SUMMARY_HEADER
-        summary_text += messages.ORDER_SUMMARY_SERVER.format(server_name=server_info['name'])
-        
-        total_price = 0
-        plan_details_for_admin = ""
-        if order_data['purchase_type'] == 'server':
+        purchase_type = order_data.get('purchase_type')
+
+        if purchase_type == 'server':
             server_info = _db_manager.get_server_by_id(order_data['server_id'])
             summary_text += messages.ORDER_SUMMARY_SERVER.format(server_name=server_info['name'])
-        elif order_data['purchase_type'] == 'profile':
+        elif purchase_type == 'profile':
             profile_info = _db_manager.get_profile_by_id(order_data['profile_id'])
             summary_text += f"🧬 **پروفایل:** `{profile_info['name']}`\n"
+        else:
+            logger.error(f"Invalid purchase_type '{purchase_type}' for user {user_id}")
+            _bot.edit_message_text(messages.OPERATION_FAILED, user_id, message.message_id)
+            _clear_user_state(user_id); return
         if order_data['plan_type'] == 'fixed_monthly':
             plan = order_data['plan_details']
             summary_text += messages.ORDER_SUMMARY_PLAN.format(plan_name=plan['name'])
