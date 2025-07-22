@@ -155,6 +155,7 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
     def start_purchase(user_id, message):
         """فرآیند خرید را با نمایش انتخاب نوع (سرور یا پروفایل) آغاز می‌کند."""
         # بررسی اینکه آیا حداقل یک سرور یا پروفایل فعال برای فروش وجود دارد
+        _clear_user_state(user_id)
         active_servers = _db_manager.get_all_servers(only_active=True)
         active_profiles = _db_manager.get_all_profiles(only_active=True)
         
