@@ -222,7 +222,8 @@ class DatabaseManager:
             cursor = conn.cursor()
             query = "SELECT * FROM servers"
             if only_active:
-                query += " WHERE is_active = TRUE"
+                # فقط سرورهایی را انتخاب کن که هم فعال و هم آنلاین هستند
+                query += " WHERE is_active = TRUE AND is_online = TRUE"
             cursor.execute(query)
             servers_data = cursor.fetchall()
             
@@ -241,7 +242,6 @@ class DatabaseManager:
             return []
         finally:
             if conn: conn.close()
-            
     def get_server_by_id(self, server_id):
         conn = None
         try:

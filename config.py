@@ -97,5 +97,13 @@ ZARINPAL_SANDBOX = os.getenv("ZARINPAL_SANDBOX", "False").lower() in ['true', '1
 ZARINPAL_MERCHANT_ID = os.getenv("ZARINPAL_MERCHANT_ID")
 BOT_USERNAME_ALAMOR = os.getenv("BOT_USERNAME_ALAMOR", "YourBotUsername")
 
-
+# --- تنظیمات نمایش گزینه‌های خرید ---
+# برای نمایش دکمه "خرید بر اساس سرور" این را True قرار دهید
+ENABLE_SERVER_PURCHASE = os.getenv("ENABLE_SERVER_PURCHASE", "True").lower() in ['true', '1', 't']
+# برای نمایش دکمه "خرید بر اساس پروفایل" این را True قرار دهید
+ENABLE_PROFILE_PURCHASE = os.getenv("ENABLE_PROFILE_PURCHASE", "True").lower() in ['true', '1', 't']
+# برای نمایش پلن‌های "ثابت ماهانه" این را True قرار دهید
+ENABLE_FIXED_PLANS = os.getenv("ENABLE_FIXED_PLANS", "True").lower() in ['true', '1', 't']
+# برای نمایش پلن‌های "گیگابایتی" این را True قرار دهید
+ENABLE_GIGABYTE_PLANS = os.getenv("ENABLE_GIGABYTE_PLANS", "True").lower() in ['true', '1', 't']
 

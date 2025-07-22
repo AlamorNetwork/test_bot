@@ -14,6 +14,7 @@ from utils.config_generator import ConfigGenerator
 from utils.helpers import is_float_or_int , escape_markdown_v1
 from utils.bot_helpers import send_subscription_info # این ایمپورت جدید است
 from config import ZARINPAL_MERCHANT_ID, WEBHOOK_DOMAIN , ZARINPAL_SANDBOX
+from config import ENABLE_SERVER_PURCHASE, ENABLE_PROFILE_PURCHASE, ENABLE_FIXED_PLANS, ENABLE_GIGABYTE_PLANS
 
 logger = logging.getLogger(__name__)
 
@@ -157,40 +158,51 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
 
     # --- فرآیند خرید ---
     def start_purchase(user_id, message):
-        """فرآیند خرید را با پاک کردن وضعیت قبلی و نمایش انتخاب نوع آغاز می‌کند."""
-        # --- بخش اصلاح شده و حیاتی ---
-        # پاک کردن کامل وضعیت خرید قبلی برای جلوگیری از تداخل
         _clear_user_state(user_id)
-        # --- پایان بخش اصلاح شده ---
-
-        active_servers = _db_manager.get_all_servers(only_active=True)
-        active_profiles = _db_manager.get_all_profiles(only_active=True)
         
-        if not active_servers and not active_profiles:
-            _bot.edit_message_text(messages.NO_ACTIVE_SERVERS_FOR_BUY, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button("user_main_menu"))
+        # بررسی گزینه‌های فعال
+        server_option_enabled = ENABLE_SERVER_PURCHASE and _db_manager.get_all_servers(only_active=True)
+        profile_option_enabled = ENABLE_PROFILE_PURCHASE and _db_manager.get_all_profiles(only_active=True)
+
+        if not server_option_enabled and not profile_option_enabled:
+            _bot.edit_message_text(messages.NO_ACTIVE_SERVERS_FOR_BUY, user_id, message.message_id); return
+
+        # اگر هر دو گزینه فعال بودند، از کاربر بپرس
+        if server_option_enabled and profile_option_enabled:
+            _bot.edit_message_text("می‌خواهید بر چه اساسی سرویس خود را انتخاب کنید?", user_id, message.message_id, reply_markup=inline_keyboards.get_purchase_type_menu())
+        # اگر فقط خرید سرور فعال بود، مستقیماً به آن مرحله برو
+        elif server_option_enabled:
+            select_server_for_purchase(user_id, message)
+        # اگر فقط خرید پروفایل فعال بود، مستقیماً به آن مرحله برو
+        elif profile_option_enabled:
+            select_profile_for_purchase(user_id, message)
+
+    def select_server_for_purchase(user_id, message):
+        """لیست سرورهای فعال را برای خرید به کاربر نمایش می‌دهد."""
+        active_servers = _db_manager.get_all_servers(only_active=True)
+        if not active_servers:
+            _bot.edit_message_text(messages.NO_ACTIVE_SERVERS_FOR_BUY, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button("user_buy_service"))
             return
         
+        _user_states[user_id] = {'state': 'selecting_server', 'data': {'purchase_type': 'server'}}
         _bot.edit_message_text(
-            "می‌خواهید بر چه اساسی سرویس خود را انتخاب کنید؟",
+            messages.SELECT_SERVER_PROMPT,
             user_id,
             message.message_id,
-            reply_markup=inline_keyboards.get_purchase_type_menu()
+            reply_markup=inline_keyboards.get_server_selection_menu(active_servers)
         )
 
-    def select_server_for_purchase(user_id, server_id, message):
-        _user_states[user_id]['data']['server_id'] = server_id
-        _user_states[user_id]['state'] = 'selecting_plan_type'
-        _bot.edit_message_text(messages.SELECT_PLAN_TYPE_PROMPT_USER, user_id, message.message_id, reply_markup=inline_keyboards.get_plan_type_selection_menu_user(server_id))
-    
     def select_plan_type(user_id, plan_type, message):
         _user_states[user_id]['data']['plan_type'] = plan_type
         
-        # تعیین دکمه بازگشت بر اساس نوع خرید
+        # تعیین دکمه بازگشت بر اساس نوع خرید (سرور یا پروفایل)
         purchase_type = _user_states[user_id]['data'].get('purchase_type')
         if purchase_type == 'profile':
+            # اگر کاربر در حال خرید پروفایل است، باید به لیست پروفایل‌ها برگردد
             back_callback = "buy_type_profile"
         else:
-            back_callback = f"buy_select_server_{_user_states[user_id]['data']['server_id']}"
+            # اگر در حال خرید سرور است، باید به لیست سرورها برگردد
+            back_callback = "buy_type_server"
 
         if plan_type == 'fixed_monthly':
             active_plans = [p for p in _db_manager.get_all_plans(only_active=True) if p['plan_type'] == 'fixed_monthly']
@@ -209,16 +221,6 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
             _user_states[user_id]['state'] = 'waiting_for_gigabytes_input'
             sent_msg = _bot.edit_message_text(messages.ENTER_GIGABYTES_PROMPT, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button(back_callback))
             _user_states[user_id]['prompt_message_id'] = sent_msg.message_id
-        elif plan_type == 'gigabyte_based':
-                gb_plan = next((p for p in _db_manager.get_all_plans(only_active=True) if p['plan_type'] == 'gigabyte_based'), None)
-                if not gb_plan or not gb_plan.get('per_gb_price'):
-                    _bot.edit_message_text(messages.GIGABYTE_PLAN_NOT_CONFIGURED, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button(f"buy_select_server_{_user_states[user_id]['data']['server_id']}"))
-                    return
-                _user_states[user_id]['data']['gb_plan_details'] = gb_plan
-                _user_states[user_id]['state'] = 'waiting_for_gigabytes_input'
-                sent_msg = _bot.edit_message_text(messages.ENTER_GIGABYTES_PROMPT, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button(f"buy_select_server_{_user_states[user_id]['data']['server_id']}"))
-                _user_states[user_id]['prompt_message_id'] = sent_msg.message_id
-
     def select_fixed_plan(user_id, plan_id, message):
         plan = _db_manager.get_plan_by_id(plan_id)
         if not plan:
