@@ -236,14 +236,22 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
         order_data = _user_states[user_id]['data']
         
         summary_text = messages.ORDER_SUMMARY_HEADER
+    
+        purchase_type = order_data.get('purchase_type')
         
         # FIX: Check for purchase_type before accessing server_id or profile_id
-        if order_data.get('purchase_type') == 'server':
+        if purchase_type == 'server':
             server_info = _db_manager.get_server_by_id(order_data['server_id'])
             summary_text += messages.ORDER_SUMMARY_SERVER.format(server_name=server_info['name'])
-        elif order_data.get('purchase_type') == 'profile':
+        elif purchase_type == 'profile':
             profile_info = _db_manager.get_profile_by_id(order_data['profile_id'])
             summary_text += f"🧬 **پروفایل:** `{profile_info['name']}`\n"
+        else:
+            # در صورت بروز خطای پیش‌بینی نشده در وضعیت، به کاربر اطلاع می‌دهیم
+            logger.error(f"Invalid purchase_type '{purchase_type}' for user {user_id} in show_order_summary.")
+            _bot.edit_message_text(messages.OPERATION_FAILED, user_id, message.message_id)
+            _clear_user_state(user_id)
+            return
 
         # The rest of the function for calculating price and duration
         total_price = 0
