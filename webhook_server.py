@@ -130,14 +130,22 @@ def handle_subscription_request(subscription_id):
 
     try:
         config_list = json.loads(configs_json)
-        # استخراج لینک‌های vless/vmess از لیست دیکشنری‌ها
-        config_urls = [item['url'] for item in config_list if 'url' in item]
         
+        # --- بخش اصلی اصلاح شده ---
+        # به جای 'url'، از کلید صحیح 'config_url' استفاده می‌کنیم
+        config_urls = [item['config_url'] for item in config_list if 'config_url' in item]
+        # --- پایان بخش اصلاح شده ---
+        
+        if not config_urls:
+            logger.warning(f"No valid config URLs found in JSON for subscription ID {subscription_id}")
+            return "", 204
+
         # ترکیب لینک‌ها با خط جدید
         combined_configs = "\n".join(config_urls)
         
         # انکود کردن به Base64 برای تحویل به اپلیکیشن
         return base64.b64encode(combined_configs.encode('utf-8')).decode('utf-8')
+        
     except Exception as e:
         logger.error(f"Error processing subscription ID {subscription_id}: {e}")
         return "Internal Server Error", 500
