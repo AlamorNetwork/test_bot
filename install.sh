@@ -53,7 +53,41 @@ setup_database() {
     
     print_success "PostgreSQL database and user created successfully."
 }
+migrate_from_sqlite() {
+    print_warning "این عملیات تمام اطلاعات دیتابیس SQLite قدیمی شما را به PostgreSQL منتقل می‌کند."
+    read -p "آیا فایل دیتابیس قدیمی شما (alamor_vpn.db) در پوشه 'database' قرار دارد؟ (y/n): " confirm_path
+    if [[ "$confirm_path" != "y" ]]; then
+        print_info "مهاجرت لغو شد."; return
+    fi
+    
+    print_info "در حال اجرای اسکریپت مهاجرت..."
+    local PYTHON_EXEC="$INSTALL_DIR/.venv/bin/python3"
+    $PYTHON_EXEC "$INSTALL_DIR/migrate_db.py"
+    
+    if [ $? -eq 0 ]; then
+        print_success "مهاجرت اطلاعات با موفقیت انجام شد."
+        # تغییر نام دیتابیس قدیمی برای جلوگیری از استفاده مجدد
+        mv "$INSTALL_DIR/database/alamor_vpn.db" "$INSTALL_DIR/database/alamor_vpn.db.migrated"
+        print_info "فایل دیتابیس قدیمی به alamor_vpn.db.migrated تغییر نام داد."
+    else
+        print_error "در حین مهاجرت خطایی رخ داد. لطفاً لاگ‌ها را بررسی کنید."
+    fi
+}
 
+# --- به‌روزرسانی منوی راهنما ---
+show_help() {
+    echo "دستورات موجود:"
+    echo "  install   نصب کامل و راه‌اندازی اولیه ربات"
+    echo "  migrate   مهاجرت از دیتابیس SQLite به PostgreSQL"
+    # ... (بقیه دستورات)
+}
+
+# --- به‌روزرسانی بخش case ---
+case "$1" in
+    install) install_bot ;;
+    migrate) check_root; cd "$INSTALL_DIR"; migrate_from_sqlite ;;
+    # ... (بقیه دستورات)
+esac
 install_bot() {
     check_root
     print_info "Starting the complete installation of AlamorVPN Bot..."
@@ -298,6 +332,7 @@ show_help() {
     echo "-----------------------------------"
     echo "Commands:"
     echo -e "  ${GREEN}install${NC}   Full installation and initial setup of the bot."
+    echo -e "  ${GREEN}migrate${NC}   مهاجرت از دیتابیس SQLite به PostgreSQL"
     echo -e "  ${GREEN}update${NC}    Update the bot to the latest version from GitHub."
     echo -e "  ${GREEN}remove${NC}    Completely remove the bot and its services."
     echo -e "  ${YELLOW}start${NC}     Start the bot and webhook services."
@@ -325,6 +360,7 @@ if [ ! -f "main.py" ]; then
 fi
 
 case "$1" in
+    migrate) check_root; cd "$INSTALL_DIR"; migrate_from_sqlite ;;
     update) update_bot ;;
     remove) remove_bot ;;
     backup) create_backup ;;
@@ -333,5 +369,6 @@ case "$1" in
     restart) check_root; sudo systemctl restart $BOT_SERVICE_NAME $WEBHOOK_SERVICE_NAME 2>/dev/null; print_success "Services restarted." ;;
     status) check_root; print_info "Main Bot Service Status:"; sudo systemctl --no-pager status $BOT_SERVICE_NAME; print_info "\nWebhook Service Status:"; sudo systemctl --no-pager status $WEBHOOK_SERVICE_NAME ;;
     logs) sudo journalctl -u $BOT_SERVICE_NAME -f ;;
+    
     *) show_help ;;
 esac

@@ -5,7 +5,8 @@ import logging
 from cryptography.fernet import Fernet
 import os
 import json
-
+import psycopg2
+from psycopg2.extras import DictCursor, execute_values
 from config import ENCRYPTION_KEY, DATABASE_NAME
 
 logger = logging.getLogger(__name__)
