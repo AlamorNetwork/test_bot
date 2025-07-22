@@ -877,33 +877,49 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
     def show_profile_inbounds_for_server(call, profile_id, server_id):
         """منوی چندانتخابی اینباندها را برای یک پروفایل و سرور خاص نمایش می‌دهد."""
         admin_id, message = call.from_user.id, call.message
-        server = _db_manager.get_server_by_id(server_id)
-        if not server: _bot.answer_callback_query(call.id, "سرور یافت نشد.", show_alert=True); return
+        server_data = _db_manager.get_server_by_id(server_id)
+        if not server_data:
+            _bot.answer_callback_query(call.id, "خطا: سرور یافت نشد.", show_alert=True)
+            return
 
-        _bot.edit_message_text("⏳ در حال دریافت لیست اینباندها...", admin_id, message.message_id)
-        api_client = _xui_api(panel_url=server['panel_url'], username=server['username'], password=server['password'])
-        if not api_client.login(): _bot.edit_message_text("❌ اتصال به پنل سرور ناموفق بود.", admin_id, message.message_id); return
+        _bot.edit_message_text("⏳ در حال دریافت لیست اینباندها از پنل...", admin_id, message.message_id)
+        
+        api_client = _xui_api(panel_url=server_data['panel_url'], username=server_data['username'], password=server_data['password'])
+        if not api_client.login():
+            _bot.edit_message_text("❌ اتصال به پنل سرور ناموفق بود.", admin_id, message.message_id, reply_markup=inline_keyboards.get_back_button(f"admin_manage_profile_inbounds_{profile_id}"))
+            return
         
         panel_inbounds = api_client.list_inbounds()
-        if not panel_inbounds: _bot.edit_message_text("هیچ اینباندی در پنل این سرور یافت نشد.", admin_id, message.message_id); return
+        if not panel_inbounds:
+            _bot.edit_message_text("هیچ اینباندی در پنل این سرور یافت نشد.", admin_id, message.message_id, reply_markup=inline_keyboards.get_back_button(f"admin_manage_profile_inbounds_{profile_id}"))
+            return
 
+        # دریافت اینباندهایی که از قبل برای این پروفایل انتخاب شده‌اند
         selected_db_ids = set(_db_manager.get_profile_inbounds(profile_id))
+        
+        # ساخت یک نقشه برای تبدیل ID اینباند پنل به ID دیتابیس (server_inbounds)
         inbound_map = _db_manager.get_server_inbounds_map(server_id)
         
+        # --- بخش اصلاح شده و حیاتی ---
+        # ذخیره تمام اطلاعات لازم در وضعیت (state) برای استفاده در مراحل بعدی
         _admin_states[admin_id] = {
-            'state': 'selecting_profile_inbounds', 'profile_id': profile_id,
-            'server_id': server_id, 'selected_ids': selected_db_ids, 'inbound_map': inbound_map
+            'state': 'selecting_profile_inbounds',
+            'profile_id': profile_id,
+            'server_id': server_id,
+            'selected_ids': selected_db_ids,
+            'inbound_map': inbound_map,
+            'panel_inbounds': panel_inbounds  # <-- این خط تضمین می‌کند که لیست کامل ذخیره شود
         }
+        # --- پایان بخش اصلاح شده ---
         
         profile = _db_manager.get_profile_by_id(profile_id)
-        text = f"🧬 **پروفایل:** {profile['name']}\n**سرور:** {server['name']}\n\nلطفاً اینباندهای مورد نظر را انتخاب کنید:"
-        keyboard = inline_keyboards.get_profile_inbound_selection_menu(profile_id, server_id, panel_inbounds, selected_db_ids, inbound_map)
+        text = f"🧬 **پروفایل:** {profile['name']}\n**سرور:** {server_data['name']}\n\nلطفاً اینباندهای مورد نظر را انتخاب کنید:"
+        
+        keyboard = inline_keyboards.get_profile_inbound_selection_menu(profile_id, server_id, panel_inbounds, list(selected_db_ids), inbound_map)
         _bot.edit_message_text(text, admin_id, message.message_id, reply_markup=keyboard, parse_mode='Markdown')
 
     def handle_toggle_profile_inbound(call, profile_id, db_inbound_id):
-        """
-        وضعیت تیک خوردن یک اینباند را در حافظه موقت تغییر داده و فقط کیبورد را به‌روز می‌کند.
-        """
+        """وضعیت تیک خوردن یک اینباند را در حافظه موقت تغییر داده و فقط کیبورد را به‌روز می‌کند."""
         admin_id = call.from_user.id
         state_data = _admin_states.get(admin_id)
 
@@ -920,12 +936,16 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         else:
             selected_ids.add(db_inbound_id)
             
-        # --- بخش اصلی اصلاح شده ---
-        # به جای فراخوانی مجدد کل تابع، فقط کیبورد را با اطلاعات موجود بازسازی و ویرایش می‌کنیم
-        
+        # --- بخش اصلاح شده و حیاتی ---
+        # بازخوانی اطلاعات لازم از حافظه موقت (state)
         panel_inbounds = state_data.get('panel_inbounds', [])
         inbound_map = state_data.get('inbound_map', {})
         server_id = state_data.get('server_id')
+
+        # اگر به هر دلیلی لیست اینباندها در حافظه نبود، از ادامه کار جلوگیری کن
+        if not panel_inbounds:
+            _bot.answer_callback_query(call.id, "خطا در بازخوانی لیست اینباندها.", show_alert=True)
+            return
 
         # ساخت کیبورد جدید با وضعیت به‌روز شده
         new_keyboard = inline_keyboards.get_profile_inbound_selection_menu(
@@ -943,12 +963,12 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
                 message_id=call.message.message_id,
                 reply_markup=new_keyboard
             )
-            _bot.answer_callback_query(call.id) # ارسال یک پاسخ خالی برای حذف "loading"
+            _bot.answer_callback_query(call.id)
         except telebot.apihelper.ApiTelegramException as e:
             if 'message is not modified' not in e.description:
                 logger.error(f"Error updating profile inbound keyboard: {e}")
                 _bot.answer_callback_query(call.id, "خطا در به‌روزرسانی کیبورد.")
-    # --- پایان بخش اصلاح شده ---
+        # --- پایان بخش اصلاح شده ---
     def save_profile_inbounds(call, profile_id):
         admin_id = call.from_user.id
         state_data = _admin_states.get(admin_id)
