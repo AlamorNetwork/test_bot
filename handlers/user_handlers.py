@@ -153,16 +153,19 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
 
     # --- فرآیند خرید ---
     def start_purchase(user_id, message):
-        """فرآیند خرید را با نمایش انتخاب نوع (سرور یا پروفایل) آغاز می‌کند."""
-        # بررسی اینکه آیا حداقل یک سرور یا پروفایل فعال برای فروش وجود دارد
+        """فرآیند خرید را با پاک کردن وضعیت قبلی و نمایش انتخاب نوع آغاز می‌کند."""
+        # --- بخش اصلاح شده و حیاتی ---
+        # پاک کردن کامل وضعیت خرید قبلی برای جلوگیری از تداخل
         _clear_user_state(user_id)
+        # --- پایان بخش اصلاح شده ---
+
         active_servers = _db_manager.get_all_servers(only_active=True)
         active_profiles = _db_manager.get_all_profiles(only_active=True)
         
         if not active_servers and not active_profiles:
             _bot.edit_message_text(messages.NO_ACTIVE_SERVERS_FOR_BUY, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button("user_main_menu"))
             return
-    
+        
         _bot.edit_message_text(
             "می‌خواهید بر چه اساسی سرویس خود را انتخاب کنید؟",
             user_id,
@@ -236,10 +239,10 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
         order_data = _user_states[user_id]['data']
         
         summary_text = messages.ORDER_SUMMARY_HEADER
-    
-        purchase_type = order_data.get('purchase_type')
         
-        # FIX: Check for purchase_type before accessing server_id or profile_id
+        purchase_type = order_data.get('purchase_type')
+
+        # بررسی نوع خرید و نمایش اطلاعات مربوطه
         if purchase_type == 'server':
             server_info = _db_manager.get_server_by_id(order_data['server_id'])
             summary_text += messages.ORDER_SUMMARY_SERVER.format(server_name=server_info['name'])
@@ -253,7 +256,7 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
             _clear_user_state(user_id)
             return
 
-        # The rest of the function for calculating price and duration
+        # ... (بقیه منطق تابع برای محاسبه قیمت و نمایش پلن بدون تغییر باقی می‌ماند) ...
         total_price = 0
         plan_details_for_admin = ""
         
