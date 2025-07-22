@@ -237,7 +237,12 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
         server_info = _db_manager.get_server_by_id(order_data['server_id'])
         summary_text = messages.ORDER_SUMMARY_HEADER
         summary_text += messages.ORDER_SUMMARY_SERVER.format(server_name=server_info['name'])
-        
+        if order_data.get('purchase_type') == 'server':
+            server_info = _db_manager.get_server_by_id(order_data['server_id'])
+            summary_text += messages.ORDER_SUMMARY_SERVER.format(server_name=server_info['name'])
+        elif order_data.get('purchase_type') == 'profile':
+            profile_info = _db_manager.get_profile_by_id(order_data['profile_id'])
+            summary_text += f"🧬 **پروفایل:** `{profile_info['name']}`\n"
         total_price = 0
         plan_details_for_admin = ""
         

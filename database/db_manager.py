@@ -215,25 +215,33 @@ class DatabaseManager:
             if conn: conn.close()
 
     def get_all_servers(self, only_active=True):
-        """تمام سرورها را از دیتابیس دریافت می‌کند."""
+        """تمام سرورها را با اطلاعات رمزگشایی شده از دیتابیس دریافت می‌کند."""
         conn = None
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             query = "SELECT * FROM servers"
+            # این بخش را اصلاح می‌کنیم تا فقط بر اساس is_active فیلتر کند
+            # وضعیت آنلاین بودن در خود تابع تست بررسی می‌شود
             if only_active:
-                # فقط سرورهایی را انتخاب کن که هم فعال و هم آنلاین هستند
-                query += " WHERE is_active = TRUE AND is_online = TRUE"
+                query += " WHERE is_active = TRUE"
             cursor.execute(query)
             servers_data = cursor.fetchall()
             
             decrypted_servers = []
             for server in servers_data:
                 server_dict = dict(server)
-                # ... (بخش رمزگشایی اطلاعات مانند قبل) ...
+                # --- بخش اصلاح شده و حیاتی ---
+                # رمزگشایی تمام فیلدهای لازم قبل از بازگرداندن
+                server_dict['panel_url'] = self._decrypt(server_dict['panel_url'])
+                server_dict['username'] = self._decrypt(server_dict['username'])
+                server_dict['password'] = self._decrypt(server_dict['password'])
+                server_dict['subscription_base_url'] = self._decrypt(server_dict['subscription_base_url'])
+                server_dict['subscription_path_prefix'] = self._decrypt(server_dict['subscription_path_prefix'])
+                # --- پایان بخش اصلاح شده ---
                 decrypted_servers.append(server_dict)
             return decrypted_servers
-        except sqlite3.Error as e:
+        except Exception as e:
             logger.error(f"Error getting all servers: {e}")
             return []
         finally:
