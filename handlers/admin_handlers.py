@@ -948,8 +948,7 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             if 'message is not modified' not in e.description:
                 logger.error(f"Error updating profile inbound keyboard: {e}")
                 _bot.answer_callback_query(call.id, "خطا در به‌روزرسانی کیبورد.")
-        # --- پایان بخش اصلاح شده ---
-
+    # --- پایان بخش اصلاح شده ---
     def save_profile_inbounds(call, profile_id):
         admin_id = call.from_user.id
         state_data = _admin_states.get(admin_id)
