@@ -234,35 +234,46 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
         _user_states[user_id]['state'] = 'confirming_order'
         order_data = _user_states[user_id]['data']
         
-        server_info = _db_manager.get_server_by_id(order_data['server_id'])
         summary_text = messages.ORDER_SUMMARY_HEADER
-        summary_text += messages.ORDER_SUMMARY_SERVER.format(server_name=server_info['name'])
+        
+        # --- بخش اصلاح شده و حیاتی ---
+        # ابتدا نوع خرید را بررسی می‌کنیم
         if order_data.get('purchase_type') == 'server':
             server_info = _db_manager.get_server_by_id(order_data['server_id'])
             summary_text += messages.ORDER_SUMMARY_SERVER.format(server_name=server_info['name'])
         elif order_data.get('purchase_type') == 'profile':
             profile_info = _db_manager.get_profile_by_id(order_data['profile_id'])
             summary_text += f"🧬 **پروفایل:** `{profile_info['name']}`\n"
+        # --- پایان بخش اصلاح شده ---
+
         total_price = 0
         plan_details_for_admin = ""
         
         if order_data['plan_type'] == 'fixed_monthly':
             plan = order_data['plan_details']
-            summary_text += messages.ORDER_SUMMARY_FIXED_PLAN.format(
-                plan_name=plan['name'],
-                volume_gb=plan['volume_gb'],
-                duration_days=plan['duration_days']
-            )
+            summary_text += messages.ORDER_SUMMARY_PLAN.format(plan_name=plan['name'])
+            summary_text += messages.ORDER_SUMMARY_VOLUME.format(volume_gb=plan['volume_gb'])
+            duration_days = plan.get('duration_days')
+            duration_text = f"{duration_days} روز"
             total_price = plan['price']
-            plan_details_for_admin = f"{plan['name']} ({plan['volume_gb']}GB, {plan['duration_days']} روز)"
+            plan_details_for_admin = f"{plan['name']} ({plan['volume_gb']}GB, {duration_days} روز)"
 
         elif order_data['plan_type'] == 'gigabyte_based':
             gb_plan = order_data['gb_plan_details']
             requested_gb = order_data['requested_gb']
+            summary_text += messages.ORDER_SUMMARY_PLAN.format(plan_name=gb_plan['name'])
+            summary_text += messages.ORDER_SUMMARY_VOLUME.format(volume_gb=requested_gb)
+            
+            duration_days = gb_plan.get('duration_days')
+            if duration_days and duration_days > 0:
+                duration_text = f"{duration_days} روز"
+            else:
+                duration_text = "نامحدود"
+                
             total_price = requested_gb * gb_plan['per_gb_price']
-            summary_text += messages.ORDER_SUMMARY_GIGABYTE_PLAN.format(gigabytes=requested_gb)
-            plan_details_for_admin = f"{requested_gb} گیگابایت"
+            plan_details_for_admin = f"{gb_plan['name']} ({requested_gb}GB, {duration_text})"
 
+        summary_text += messages.ORDER_SUMMARY_DURATION.format(duration_days=duration_text)
         summary_text += messages.ORDER_SUMMARY_TOTAL_PRICE.format(total_price=total_price)
         summary_text += messages.ORDER_SUMMARY_CONFIRM_PROMPT
         
@@ -270,9 +281,7 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
         order_data['plan_details_for_admin'] = plan_details_for_admin
         
         prompt_id = _user_states[user_id].get('prompt_message_id', message.message_id)
-        _bot.edit_message_text(summary_text, user_id, prompt_id, reply_markup=inline_keyboards.get_order_confirmation_menu())
-
-    # --- فرآیند پرداخت ---
+        _bot.edit_message_text(summary_text, user_id, prompt_id, parse_mode='Markdown', reply_markup=inline_keyboards.get_order_confirmation_menu())
     def display_payment_gateways(user_id, message):
         _user_states[user_id]['state'] = 'selecting_gateway'
         active_gateways = _db_manager.get_all_payment_gateways(only_active=True)
