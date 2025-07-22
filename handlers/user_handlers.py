@@ -74,20 +74,27 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
             send_single_configs(user_id, purchase_id)
     @_bot.callback_query_handler(func=lambda call: not call.from_user.is_bot and call.data.startswith(('buy_', 'select_', 'confirm_', 'cancel_')))
     def handle_purchase_callbacks(call):
-        """هندل کردن دکمه‌های فرآیند خرید"""
         _bot.answer_callback_query(call.id)
         user_id = call.from_user.id
         data = call.data
         
-        # پاک کردن پیام قبلی
-        try:
-            _bot.edit_message_reply_markup(user_id, call.message.message_id, reply_markup=None)
-        except Exception:
-            pass
-
-        if data.startswith("buy_select_server_"):
+        if data == "buy_type_server":
+            select_server_for_purchase(user_id, call.message)
+        elif data == "buy_type_profile":
+            select_profile_for_purchase(user_id, call.message)
+        
+        elif data.startswith("buy_select_server_"):
             server_id = int(data.replace("buy_select_server_", ""))
-            select_server_for_purchase(user_id, server_id, call.message)
+            _user_states[user_id]['data']['purchase_type'] = 'server'
+            _user_states[user_id]['data']['server_id'] = server_id
+            _bot.edit_message_text(messages.SELECT_PLAN_TYPE_PROMPT_USER, user_id, call.message.message_id, reply_markup=inline_keyboards.get_plan_type_selection_menu_user())
+
+        elif data.startswith("buy_select_profile_"):
+            profile_id = int(data.replace("buy_select_profile_", ""))
+            _user_states[user_id]['data']['profile_id'] = profile_id
+            # پس از انتخاب پروفایل، به مرحله انتخاب نوع پلن می‌رویم
+            _bot.edit_message_text(messages.SELECT_PLAN_TYPE_PROMPT_USER, user_id, call.message.message_id, reply_markup=inline_keyboards.get_plan_type_selection_menu_user())
+
         elif data.startswith("buy_plan_type_"):
             select_plan_type(user_id, data.replace("buy_plan_type_", ""), call.message)
         elif data.startswith("buy_select_plan_"):
@@ -101,27 +108,6 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
         elif data == "cancel_order":
             _clear_user_state(user_id)
             _bot.edit_message_text(messages.ORDER_CANCELED, user_id, call.message.message_id, reply_markup=inline_keyboards.get_back_button("user_main_menu"))
-        # --- بخش جدید ---
-        elif data == "buy_type_server":
-            # اگر کاربر خرید بر اساس سرور را انتخاب کرد، منطق قدیمی اجرا می‌شود
-            # نام تابع را به select_server_for_purchase تغییر می‌دهیم تا با پروفایل اشتباه نشود
-            select_server_for_purchase(user_id, call.message)
-        elif data == "buy_type_profile":
-            # اگر پروفایل را انتخاب کرد، لیست پروفایل‌ها نمایش داده می‌شود
-            select_profile_for_purchase(user_id, call.message)
-        elif data.startswith("buy_select_profile_"):
-            profile_id = int(data.replace("buy_select_profile_", ""))
-            # در اینجا، پس از انتخاب پروفایل، باید به مرحله انتخاب پلن برویم
-            # این منطق مشابه انتخاب سرور است
-            _user_states[user_id]['data']['profile_id'] = profile_id
-            # ... (در مرحله بعد، تابع select_plan_type را فراخوانی می‌کنیم)
-        # --- پایان بخش جدید ---
-
-        elif data.startswith("buy_select_server_"):
-            server_id = int(data.replace("buy_select_server_", ""))
-            _user_states[user_id]['data']['purchase_type'] = 'server' # نوع خرید را مشخص می‌کنیم
-            _user_states[user_id]['data']['server_id'] = server_id
-            # ... (در مرحله بعد، تابع select_plan_type را فراخوانی می‌کنیم)
 
     @_bot.message_handler(content_types=['text', 'photo'], func=lambda msg: _user_states.get(msg.from_user.id))
     def handle_stateful_messages(message):
@@ -183,23 +169,40 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
     
     def select_plan_type(user_id, plan_type, message):
         _user_states[user_id]['data']['plan_type'] = plan_type
+        
+        # تعیین دکمه بازگشت بر اساس نوع خرید
+        purchase_type = _user_states[user_id]['data'].get('purchase_type')
+        if purchase_type == 'profile':
+            back_callback = "buy_type_profile"
+        else:
+            back_callback = f"buy_select_server_{_user_states[user_id]['data']['server_id']}"
+
         if plan_type == 'fixed_monthly':
             active_plans = [p for p in _db_manager.get_all_plans(only_active=True) if p['plan_type'] == 'fixed_monthly']
             if not active_plans:
-                _bot.edit_message_text(messages.NO_FIXED_PLANS_AVAILABLE, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button(f"buy_select_server_{_user_states[user_id]['data']['server_id']}"))
+                _bot.edit_message_text(messages.NO_FIXED_PLANS_AVAILABLE, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button(back_callback))
                 return
             _user_states[user_id]['state'] = 'selecting_fixed_plan'
-            _bot.edit_message_text(messages.SELECT_FIXED_PLAN_PROMPT, user_id, message.message_id, reply_markup=inline_keyboards.get_fixed_plan_selection_menu(active_plans))
+            _bot.edit_message_text(messages.SELECT_FIXED_PLAN_PROMPT, user_id, message.message_id, reply_markup=inline_keyboards.get_fixed_plan_selection_menu(active_plans, back_callback))
         
         elif plan_type == 'gigabyte_based':
             gb_plan = next((p for p in _db_manager.get_all_plans(only_active=True) if p['plan_type'] == 'gigabyte_based'), None)
             if not gb_plan or not gb_plan.get('per_gb_price'):
-                _bot.edit_message_text(messages.GIGABYTE_PLAN_NOT_CONFIGURED, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button(f"buy_select_server_{_user_states[user_id]['data']['server_id']}"))
+                _bot.edit_message_text(messages.GIGABYTE_PLAN_NOT_CONFIGURED, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button(back_callback))
                 return
             _user_states[user_id]['data']['gb_plan_details'] = gb_plan
             _user_states[user_id]['state'] = 'waiting_for_gigabytes_input'
-            sent_msg = _bot.edit_message_text(messages.ENTER_GIGABYTES_PROMPT, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button(f"buy_select_server_{_user_states[user_id]['data']['server_id']}"))
+            sent_msg = _bot.edit_message_text(messages.ENTER_GIGABYTES_PROMPT, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button(back_callback))
             _user_states[user_id]['prompt_message_id'] = sent_msg.message_id
+        elif plan_type == 'gigabyte_based':
+                gb_plan = next((p for p in _db_manager.get_all_plans(only_active=True) if p['plan_type'] == 'gigabyte_based'), None)
+                if not gb_plan or not gb_plan.get('per_gb_price'):
+                    _bot.edit_message_text(messages.GIGABYTE_PLAN_NOT_CONFIGURED, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button(f"buy_select_server_{_user_states[user_id]['data']['server_id']}"))
+                    return
+                _user_states[user_id]['data']['gb_plan_details'] = gb_plan
+                _user_states[user_id]['state'] = 'waiting_for_gigabytes_input'
+                sent_msg = _bot.edit_message_text(messages.ENTER_GIGABYTES_PROMPT, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button(f"buy_select_server_{_user_states[user_id]['data']['server_id']}"))
+                _user_states[user_id]['prompt_message_id'] = sent_msg.message_id
 
     def select_fixed_plan(user_id, plan_id, message):
         plan = _db_manager.get_plan_by_id(plan_id)
@@ -507,7 +510,12 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
         
         total_price = 0
         plan_details_for_admin = ""
-        
+        if order_data['purchase_type'] == 'server':
+            server_info = _db_manager.get_server_by_id(order_data['server_id'])
+            summary_text += messages.ORDER_SUMMARY_SERVER.format(server_name=server_info['name'])
+        elif order_data['purchase_type'] == 'profile':
+            profile_info = _db_manager.get_profile_by_id(order_data['profile_id'])
+            summary_text += f"🧬 **پروفایل:** `{profile_info['name']}`\n"
         if order_data['plan_type'] == 'fixed_monthly':
             plan = order_data['plan_details']
             summary_text += messages.ORDER_SUMMARY_PLAN.format(plan_name=plan['name'])
@@ -624,3 +632,6 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
             message.message_id,
             reply_markup=inline_keyboards.get_profile_selection_menu(active_profiles)
         )
+        
+        
+    
