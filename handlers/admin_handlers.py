@@ -7,7 +7,7 @@ import datetime
 import json
 import os
 import zipfile
-from config import ADMIN_IDS, SUPPORT_CHANNEL_LINK
+from config import ADMIN_IDS, SUPPORT_CHANNEL_LINK , WEBHOOK_DOMAIN
 from database.db_manager import DatabaseManager
 from api_client.xui_api_client import XuiAPIClient
 from utils import messages, helpers
