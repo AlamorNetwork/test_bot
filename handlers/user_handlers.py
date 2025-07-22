@@ -390,91 +390,76 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
     def process_payment_receipt(message):
         user_id = message.from_user.id
         state_data = _user_states.get(user_id)
-
-        # اگر کاربر در وضعیت انتظار رسید نیست، خارج شو
-        if not state_data or state_data.get('state') != 'waiting_for_payment_receipt':
-            return
-
-        # اگر پیام عکس نیست، به کاربر اطلاع بده
+        if not state_data or state_data.get('state') != 'waiting_for_payment_receipt': return
         if not message.photo:
-            prompt_id = state_data.get('prompt_message_id')
-            current_text = _bot.get_chat(user_id).text or ""
-            _bot.edit_message_text(f"{messages.INVALID_RECEIPT_FORMAT}\n\n{current_text}", user_id, prompt_id)
-            return
+            prompt_id = state_data.get('prompt_message_id'); current_text = _bot.get_chat(user_id).text or ""
+            _bot.edit_message_text(f"{messages.INVALID_RECEIPT_FORMAT}\n\n{current_text}", user_id, prompt_id); return
 
-        # دریافت اطلاعات لازم از وضعیت کاربر
         order_data = state_data['data']
         user_db_info = _db_manager.get_user_by_telegram_id(user_id)
         if not user_db_info:
-            _bot.send_message(user_id, messages.OPERATION_FAILED)
-            _clear_user_state(user_id)
-            return
+            _bot.send_message(user_id, messages.OPERATION_FAILED); _clear_user_state(user_id); return
 
-        # ساخت جزئیات سفارش برای ذخیره در دیتابیس
+        # --- بخش اصلی اصلاح شده ---
+        # ساخت دیکشنری جزئیات سفارش به صورت پویا
         order_details_for_db = {
-            'user_telegram_id': user_id,
-            'user_db_id': user_db_info['id'],
+            'user_telegram_id': user_id, 'user_db_id': user_db_info['id'],
             'user_first_name': message.from_user.first_name,
-            'server_id': order_data['server_id'],
-            'server_name': _db_manager.get_server_by_id(order_data['server_id'])['name'],
-            'plan_type': order_data['plan_type'],
-            'plan_details': order_data.get('plan_details'),
-            'gb_plan_details': order_data.get('gb_plan_details'),
-            'requested_gb': order_data.get('requested_gb'),
-            'total_price': order_data['total_price'],
-            'gateway_name': order_data['gateway_details']['name'],
+            'purchase_type': order_data.get('purchase_type'),
+            'plan_type': order_data['plan_type'], 'plan_details': order_data.get('plan_details'),
+            'gb_plan_details': order_data.get('gb_plan_details'), 'requested_gb': order_data.get('requested_gb'),
+            'total_price': order_data['total_price'], 'gateway_name': order_data['gateway_details']['name'],
             'plan_details_text_display': order_data['plan_details_for_admin'],
             'receipt_file_id': message.photo[-1].file_id
         }
+        
+        # بر اساس نوع خرید، اطلاعات سرور یا پروفایل را اضافه می‌کنیم
+        if order_data.get('purchase_type') == 'server':
+            server_info = _db_manager.get_server_by_id(order_data['server_id'])
+            order_details_for_db['server_id'] = order_data['server_id']
+            order_details_for_db['server_name'] = server_info['name']
+        elif order_data.get('purchase_type') == 'profile':
+            profile_info = _db_manager.get_profile_by_id(order_data['profile_id'])
+            order_details_for_db['profile_id'] = order_data['profile_id']
+            order_details_for_db['profile_name'] = profile_info['name'] # نام پروفایل را برای نمایش به ادمین اضافه می‌کنیم
+        # --- پایان بخش اصلاح شده ---
 
-        # ثبت پرداخت در دیتابیس
-        payment_id = _db_manager.add_payment(
-            user_db_info['id'],
-            order_data['total_price'],
-            message.message_id,
-            json.dumps(order_details_for_db)
-        )
-
+        payment_id = _db_manager.add_payment(user_db_info['id'], order_data['total_price'], message.message_id, json.dumps(order_details_for_db))
         if not payment_id:
-            _bot.send_message(user_id, messages.RECEIPT_SEND_ERROR)
-            _clear_user_state(user_id)
-            return
+            _bot.send_message(user_id, messages.RECEIPT_SEND_ERROR); _clear_user_state(user_id); return
 
-        # --- بخش جدید: ارسال نوتیفیکیشن به ادمین‌ها مستقیماً از اینجا ---
-        from config import ADMIN_IDS # ایمپورت لیست ادمین‌ها
+        # --- ارسال نوتیفیکیشن به ادمین (این بخش نیز باید هوشمند شود) ---
+        from config import ADMIN_IDS
+        
+        # تعیین نام سرویس (سرور یا پروفایل) برای نمایش به ادمین
+        service_name = order_details_for_db.get('server_name') or order_details_for_db.get('profile_name')
 
         caption = messages.ADMIN_NEW_PAYMENT_NOTIFICATION_DETAILS.format(
             user_first_name=helpers.escape_markdown_v1(order_details_for_db['user_first_name']),
             user_telegram_id=order_details_for_db['user_telegram_id'],
             amount=order_details_for_db['total_price'],
-            server_name=helpers.escape_markdown_v1(order_details_for_db['server_name']),
+            server_name=helpers.escape_markdown_v1(service_name), # استفاده از نام سرویس
             plan_details=helpers.escape_markdown_v1(order_details_for_db['plan_details_text_display']),
             gateway_name=helpers.escape_markdown_v1(order_details_for_db['gateway_name'])
         )
         markup = inline_keyboards.get_admin_payment_action_menu(payment_id)
         
-        # ارسال پیام به تمام ادمین‌ها
         for admin_id in ADMIN_IDS:
             try:
                 sent_msg = _bot.send_photo(
-                    admin_id,
-                    order_details_for_db['receipt_file_id'],
+                    admin_id, order_details_for_db['receipt_file_id'],
                     caption=messages.ADMIN_NEW_PAYMENT_NOTIFICATION_HEADER + caption,
-                    parse_mode='Markdown',
-                    reply_markup=markup
+                    parse_mode='Markdown', reply_markup=markup
                 )
-                # آیدی پیام ارسال شده به اولین ادمین را برای ویرایش‌های بعدی ذخیره می‌کنیم
                 if admin_id == ADMIN_IDS[0]:
                     _db_manager.update_payment_admin_notification_id(payment_id, sent_msg.message_id)
             except Exception as e:
                 logger.error(f"Failed to send payment notification to admin {admin_id}: {e}")
-        # --- پایان بخش جدید ---
 
         _bot.send_message(user_id, messages.RECEIPT_RECEIVED_USER)
         _clear_user_state(user_id)
         _show_user_main_menu(user_id)
-
-    # --- سرویس‌های من ---
+        # --- سرویس‌های من ---
     def show_service_details(user_id, purchase_id, message):
         purchase = _db_manager.get_purchase_by_id(purchase_id)
         if not purchase:
