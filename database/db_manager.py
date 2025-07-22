@@ -580,16 +580,23 @@ class DatabaseManager:
             if conn: conn.close()
 
     # --- توابع خریدها (Purchases) ---
-    def add_purchase(self, user_id, server_id, plan_id, expire_date, initial_volume_gb, client_uuid, client_email, sub_id, single_configs):
+    def add_purchase(self, user_id: int, purchase_type: str, server_id: int, profile_id: int, plan_id: int, 
+                    expire_date: str, initial_volume_gb: float, subscription_id: str, full_configs_json: str):
+        """
+        یک رکورد خرید جدید (برای سرور یا پروفایل) را در دیتابیس ثبت می‌کند.
+        """
         conn = None
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO purchases (user_id, server_id, plan_id, expire_date, initial_volume_gb, xui_client_uuid, xui_client_email, subscription_id, single_configs_json, is_active)
+                INSERT INTO purchases (user_id, purchase_type, server_id, profile_id, plan_id, expire_date, 
+                                    initial_volume_gb, subscription_id, full_configs_json, is_active)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
-            """, (user_id, server_id, plan_id, expire_date, initial_volume_gb, client_uuid, client_email, sub_id, json.dumps(single_configs)))
+            """, (user_id, purchase_type, server_id, profile_id, plan_id, expire_date, 
+                initial_volume_gb, subscription_id, full_configs_json))
             conn.commit()
+            logger.info(f"Purchase record created successfully for user_id {user_id}.")
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error(f"Error adding purchase for user {user_id}: {e}")
