@@ -101,7 +101,27 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
         elif data == "cancel_order":
             _clear_user_state(user_id)
             _bot.edit_message_text(messages.ORDER_CANCELED, user_id, call.message.message_id, reply_markup=inline_keyboards.get_back_button("user_main_menu"))
+        # --- بخش جدید ---
+        elif data == "buy_type_server":
+            # اگر کاربر خرید بر اساس سرور را انتخاب کرد، منطق قدیمی اجرا می‌شود
+            # نام تابع را به select_server_for_purchase تغییر می‌دهیم تا با پروفایل اشتباه نشود
+            select_server_for_purchase(user_id, call.message)
+        elif data == "buy_type_profile":
+            # اگر پروفایل را انتخاب کرد، لیست پروفایل‌ها نمایش داده می‌شود
+            select_profile_for_purchase(user_id, call.message)
+        elif data.startswith("buy_select_profile_"):
+            profile_id = int(data.replace("buy_select_profile_", ""))
+            # در اینجا، پس از انتخاب پروفایل، باید به مرحله انتخاب پلن برویم
+            # این منطق مشابه انتخاب سرور است
+            _user_states[user_id]['data']['profile_id'] = profile_id
+            # ... (در مرحله بعد، تابع select_plan_type را فراخوانی می‌کنیم)
+        # --- پایان بخش جدید ---
 
+        elif data.startswith("buy_select_server_"):
+            server_id = int(data.replace("buy_select_server_", ""))
+            _user_states[user_id]['data']['purchase_type'] = 'server' # نوع خرید را مشخص می‌کنیم
+            _user_states[user_id]['data']['server_id'] = server_id
+            # ... (در مرحله بعد، تابع select_plan_type را فراخوانی می‌کنیم)
 
     @_bot.message_handler(content_types=['text', 'photo'], func=lambda msg: _user_states.get(msg.from_user.id))
     def handle_stateful_messages(message):
@@ -140,13 +160,21 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
 
     # --- فرآیند خرید ---
     def start_purchase(user_id, message):
-        active_servers = [s for s in _db_manager.get_all_servers() if s['is_active'] and s['is_online']]
-        if not active_servers:
+        """فرآیند خرید را با نمایش انتخاب نوع (سرور یا پروفایل) آغاز می‌کند."""
+        # بررسی اینکه آیا حداقل یک سرور یا پروفایل فعال برای فروش وجود دارد
+        active_servers = _db_manager.get_all_servers(only_active=True)
+        active_profiles = _db_manager.get_all_profiles(only_active=True)
+        
+        if not active_servers and not active_profiles:
             _bot.edit_message_text(messages.NO_ACTIVE_SERVERS_FOR_BUY, user_id, message.message_id, reply_markup=inline_keyboards.get_back_button("user_main_menu"))
             return
-        
-        _user_states[user_id] = {'state': 'selecting_server', 'data': {}}
-        _bot.edit_message_text(messages.SELECT_SERVER_PROMPT, user_id, message.message_id, reply_markup=inline_keyboards.get_server_selection_menu(active_servers))
+    
+        _bot.edit_message_text(
+            "می‌خواهید بر چه اساسی سرویس خود را انتخاب کنید؟",
+            user_id,
+            message.message_id,
+            reply_markup=inline_keyboards.get_purchase_type_menu()
+        )
 
     def select_server_for_purchase(user_id, server_id, message):
         _user_states[user_id]['data']['server_id'] = server_id
@@ -579,4 +607,20 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
             message.message_id,
             reply_markup=inline_keyboards.get_my_services_menu(purchases),
             parse_mode='Markdown'
+        )
+        
+        
+    def select_profile_for_purchase(user_id, message):
+        """لیست پروفایل‌های فعال را برای خرید به کاربر نمایش می‌دهد."""
+        active_profiles = _db_manager.get_all_profiles(only_active=True)
+        if not active_profiles:
+            _bot.edit_message_text("😔 متاسفانه در حال حاضر هیچ پروفایل فعالی برای خرید وجود ندارد.", user_id, message.message_id, reply_markup=inline_keyboards.get_back_button("user_buy_service"))
+            return
+
+        _user_states[user_id] = {'state': 'selecting_profile', 'data': {'purchase_type': 'profile'}}
+        _bot.edit_message_text(
+            "✨ لطفاً یکی از پروفایل‌های ویژه زیر را انتخاب کنید:",
+            user_id,
+            message.message_id,
+            reply_markup=inline_keyboards.get_profile_selection_menu(active_profiles)
         )

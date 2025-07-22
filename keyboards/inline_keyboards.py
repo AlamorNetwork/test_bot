@@ -283,3 +283,24 @@ def get_profile_inbound_selection_menu(profile_id, server_id, panel_inbounds, se
         types.InlineKeyboardButton("🔙 بازگشت به انتخاب سرور", callback_data=f"admin_manage_profile_inbounds_{profile_id}")
     )
     return markup
+
+
+# در فایل keyboards/inline_keyboards.py
+
+def get_purchase_type_menu():   
+    """منوی انتخاب نوع خرید (سرور یا پروفایل) را نمایش می‌دهد."""
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton("🛒 خرید بر اساس سرور (عادی)", callback_data="buy_type_server"),
+        types.InlineKeyboardButton("🧬 خرید بر اساس پروفایل (ترکیبی)", callback_data="buy_type_profile")
+    )
+    markup.add(types.InlineKeyboardButton("🔙 بازگشت به منو اصلی", callback_data="user_main_menu"))
+    return markup
+
+def get_profile_selection_menu(profiles):
+    """لیست پروفایل‌های فعال برای خرید را نمایش می‌دهد."""
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for profile in profiles:
+        markup.add(types.InlineKeyboardButton(f"🧬 {profile['name']}", callback_data=f"buy_select_profile_{profile['id']}"))
+    markup.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data="user_buy_service"))
+    return markup
