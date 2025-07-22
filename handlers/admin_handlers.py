@@ -573,59 +573,82 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         _bot.edit_message_caption("⏳ در حال ساخت و فعال‌سازی سرویس...", message.chat.id, message.message_id)
         payment = _db_manager.get_payment_by_id(payment_id)
         if not payment or payment['is_confirmed']:
-            _bot.answer_callback_query(message.id, "این پرداخت قبلاً پردازش شده است.", show_alert=True); return
+            _bot.answer_callback_query(message.id, "این پرداخت قبلاً پردازش شده است.", show_alert=True)
+            return
 
         order_details = json.loads(payment['order_details_json'])
         user_telegram_id = order_details['user_telegram_id']
         user_db_info = _db_manager.get_user_by_id(payment['user_id'])
         
-        # --- بخش اصلی اصلاح شده ---
-        # تعیین پارامترها بر اساس نوع خرید (سرور یا پروفایل)
         purchase_type = order_details.get('purchase_type')
-        
-        if order_details['plan_type'] == 'fixed_monthly':
-            plan = order_details['plan_details']
-            total_gb, duration_days = plan['volume_gb'], plan['duration_days']
-        else: # gigabyte_based
-            gb_plan = order_details['gb_plan_details']
-            total_gb, duration_days = order_details['requested_gb'], gb_plan.get('duration_days', 0)
-        
-        # فراخوانی توابع جدید و صحیح از موتور ساخت کانفیگ
+        plan_type = order_details.get('plan_type')
+
+        # --- تعیین هوشمند پارامترهای پلن ---
+        total_gb = 0
+        duration_days = 0
+        plan_id = None
+
+        if plan_type == 'fixed_monthly':
+            plan = order_details.get('plan_details')
+            if plan:
+                total_gb = plan.get('volume_gb')
+                duration_days = plan.get('duration_days')
+                plan_id = plan.get('id')
+        elif plan_type == 'gigabyte_based':
+            gb_plan = order_details.get('gb_plan_details')
+            if gb_plan:
+                total_gb = order_details.get('requested_gb')
+                duration_days = gb_plan.get('duration_days', 0)
+                plan_id = gb_plan.get('id')
+
+        # --- فراخوانی موتور ساخت کانفیگ بر اساس نوع خرید ---
+        subscription_id, full_configs = None, None
+        server_id, profile_id = None, None
+
         if purchase_type == 'profile':
-            profile_id = order_details['profile_id']
-            subscription_id, full_configs = _config_generator.create_subscription_for_profile(user_telegram_id, profile_id, total_gb, duration_days)
-            server_id = None
-        else: # حالت پیش‌فرض (خرید سرور)
-            server_id = order_details['server_id']
-            subscription_id, full_configs = _config_generator.create_subscription_for_server(user_telegram_id, server_id, total_gb, duration_days)
-            profile_id = None
+            profile_id = order_details.get('profile_id')
+            if profile_id:
+                subscription_id, full_configs = _config_generator.create_subscription_for_profile(
+                    user_telegram_id, profile_id, total_gb, duration_days
+                )
+        else: # حالت پیش‌فرض یا 'server'
+            server_id = order_details.get('server_id')
+            if server_id:
+                subscription_id, full_configs = _config_generator.create_subscription_for_server(
+                    user_telegram_id, server_id, total_gb, duration_days
+                )
 
         if not subscription_id or not full_configs:
-            _bot.edit_message_caption("❌ خطا در ساخت کانفیگ‌ها در پنل X-UI.", message.chat.id, message.message_id, reply_markup=inline_keyboards.get_back_button("admin_main_menu"))
+            _bot.edit_message_caption("❌ خطا در ساخت کانفیگ‌ها در پنل X-UI. لطفاً تنظیمات سرور و اینباندها را بررسی کنید.", message.chat.id, message.message_id, reply_markup=inline_keyboards.get_back_button("admin_main_menu"))
             return
         
+        # --- ثبت نهایی خرید در دیتابیس ---
         expire_date = (datetime.datetime.now() + datetime.timedelta(days=duration_days)) if duration_days and duration_days > 0 else None
+        
         purchase_id = _db_manager.add_purchase(
-            user_id=user_db_info['id'], purchase_type=purchase_type, server_id=server_id,
-            profile_id=profile_id, plan_id=order_details.get('plan_details', {}).get('id') or order_details.get('gb_plan_details', {}).get('id'),
+            user_id=user_db_info['id'], 
+            purchase_type=purchase_type, 
+            server_id=server_id,
+            profile_id=profile_id, 
+            plan_id=plan_id,
             expire_date=expire_date.strftime("%Y-%m-%d %H:%M:%S") if expire_date else None,
-            initial_volume_gb=total_gb, subscription_id=subscription_id,
+            initial_volume_gb=total_gb, 
+            subscription_id=subscription_id,
             full_configs_json=json.dumps(full_configs)
         )
 
         if not purchase_id:
-            _bot.edit_message_caption("❌ خطا در ذخیره خرید در دیتابیس.", message.chat.id, message.message_id); return
+            _bot.edit_message_caption("❌ خطا در ذخیره خرید در دیتابیس.", message.chat.id, message.message_id)
+            return
             
         _db_manager.update_payment_status(payment_id, True, admin_id)
         
-        # ساخت لینک نهایی سابسکریپشن که به سرور وب‌هوک ما اشاره دارد
+        # ساخت لینک نهایی سابسکریپشن که به سرور وب‌هوک اشاره دارد
         final_sub_link = f"https://{WEBHOOK_DOMAIN}/sub/{subscription_id}"
         
-        # ... (بقیه منطق ارسال پیام به ادمین و کاربر)
-        _bot.send_message(user_telegram_id, "✅ پرداخت شما با موفقیت تایید و سرویس شما فعال گردید.")
-        send_subscription_info(_bot, user_telegram_id, final_sub_link)
-
-
+        # --- ارسال پیام‌های نهایی ---
+        admin_user = _bot.get_chat_member(admin_id, admin_id).user
+        new_caption = message.caption + "\n\n" + messages.ADMIN_PAYMENT_CONFIRM
 
     def process_payment_rejection(admin_id, payment_id, message):
         payment = _db_manager.get_payment_by_id(payment_id)
