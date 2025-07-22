@@ -254,9 +254,9 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
             summary_text += messages.ORDER_SUMMARY_PLAN.format(plan_name=plan['name'])
             summary_text += messages.ORDER_SUMMARY_VOLUME.format(volume_gb=plan['volume_gb'])
             duration_days = plan.get('duration_days')
-            duration_text = f"{duration_days} روز"
+            duration_text = f"{duration_days} روز" if duration_days else "نامحدود"
             total_price = plan['price']
-            plan_details_for_admin = f"{plan['name']} ({plan['volume_gb']}GB, {duration_days} روز)"
+            plan_details_for_admin = f"{plan['name']} ({plan['volume_gb']}GB, {duration_text})"
 
         elif order_data['plan_type'] == 'gigabyte_based':
             gb_plan = order_data['gb_plan_details']
