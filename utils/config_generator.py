@@ -16,6 +16,7 @@ class ConfigGenerator:
         self.xui_api = xui_api_client
         self.db_manager = db_manager
         logger.info("ConfigGenerator initialized.")
+
     def create_subscription_for_server(self, user_telegram_id: int, server_id: int, total_gb: float, duration_days: int):
         """کانفیگ‌ها را برای یک سرور خاص می‌سازد."""
         inbounds_list = self.db_manager.get_server_inbounds(server_id, only_active=True)
@@ -29,12 +30,57 @@ class ConfigGenerator:
     def _build_configs(self, user_telegram_id: int, inbounds_list: list, total_gb: float, duration_days: int):
         """موتور اصلی ساخت کانفیگ که برای هر دو نوع خرید استفاده می‌شود."""
         all_generated_configs = []
-        subscription_id = generate_random_string(16) # شناسه یکتای این خرید
+        subscription_id = generate_random_string(16)
 
-        # ... (منطق کامل حلقه روی سرورها و اینباندها که در پاسخ‌های قبلی ارائه شد)
-        # ... (این منطق به جای subId، از subscription_id استفاده می‌کند)
+        # دسته‌بندی اینباندها بر اساس سرور برای بهینه‌سازی
+        inbounds_by_server = {}
+        for inbound_info in inbounds_list:
+            server_id = inbound_info['server_id']
+            if server_id not in inbounds_by_server:
+                inbounds_by_server[server_id] = []
+            inbounds_by_server[server_id].append(inbound_info)
+
+        # حلقه روی هر سرور
+        for server_id, inbounds in inbounds_by_server.items():
+            server_data = self.db_manager.get_server_by_id(server_id)
+            if not server_data: continue
+
+            api_client = self.xui_api(panel_url=server_data['panel_url'], username=server_data['username'], password=server_data['password'])
+            if not api_client.login(): continue
+
+            expiry_time_ms = 0
+            if duration_days and duration_days > 0:
+                expire_date = datetime.datetime.now() + datetime.timedelta(days=duration_days)
+                expiry_time_ms = int(expire_date.timestamp() * 1000)
+            
+            total_traffic_bytes = int(total_gb * (1024**3)) if total_gb else 0
+
+            # حلقه روی اینباندهای این سرور
+            for s_inbound in inbounds:
+                client_uuid = str(uuid.uuid4())
+                client_email = f"u{user_telegram_id}.{generate_random_string(6)}"
+
+                client_settings = {
+                    "id": client_uuid, "email": client_email, "flow": "",
+                    "totalGB": total_traffic_bytes, "expiryTime": int(expiry_time_ms),
+                    "enable": True, "tgId": str(user_telegram_id), "subId": "",
+                }
+                
+                add_client_payload = {"id": s_inbound['inbound_id'], "settings": json.dumps({"clients": [client_settings]})}
+                
+                if not api_client.add_client(add_client_payload):
+                    logger.error(f"Failed to add client to inbound {s_inbound['inbound_id']} on server {server_id}.")
+                    continue
+
+                inbound_details = api_client.get_inbound(s_inbound['inbound_id'])
+                if inbound_details:
+                    single_config = self._generate_single_config_url(client_uuid, server_data, inbound_details)
+                    if single_config:
+                        all_generated_configs.append(single_config)
         
-        # در نهایت، شناسه اشتراک و لیست کانفیگ‌های تکی را برمی‌گرداند
+        if not all_generated_configs:
+            return None, None # اگر هیچ کانفیگی ساخته نشد، خطا برگردان
+
         return subscription_id, all_generated_configs
     def create_client_and_configs(self, user_telegram_id: int, server_id: int, total_gb: float, duration_days: int or None):
         """

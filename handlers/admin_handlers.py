@@ -590,33 +590,28 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             gb_plan = order_details['gb_plan_details']
             total_gb, duration_days = order_details['requested_gb'], gb_plan.get('duration_days', 0)
         
-        # فراخوانی تابع صحیح برای ساخت کانفیگ
+        # فراخوانی توابع جدید و صحیح از موتور ساخت کانفیگ
         if purchase_type == 'profile':
             profile_id = order_details['profile_id']
-            subscription_id, full_configs = _config_generator.create_subscription_for_profile(
-                user_telegram_id, profile_id, total_gb, duration_days
-            )
-            server_id = None # برای خرید پروفایل، server_id نداریم
+            subscription_id, full_configs = _config_generator.create_subscription_for_profile(user_telegram_id, profile_id, total_gb, duration_days)
+            server_id = None
         else: # حالت پیش‌فرض (خرید سرور)
             server_id = order_details['server_id']
-            subscription_id, full_configs = _config_generator.create_subscription_for_server(
-                user_telegram_id, server_id, total_gb, duration_days
-            )
+            subscription_id, full_configs = _config_generator.create_subscription_for_server(user_telegram_id, server_id, total_gb, duration_days)
             profile_id = None
 
         if not subscription_id or not full_configs:
-            _bot.edit_message_caption("❌ خطا در ساخت کانفیگ‌ها در پنل X-UI.", message.chat.id, message.message_id); return
+            _bot.edit_message_caption("❌ خطا در ساخت کانفیگ‌ها در پنل X-UI.", message.chat.id, message.message_id, reply_markup=inline_keyboards.get_back_button("admin_main_menu"))
+            return
         
-        # ثبت خرید در دیتابیس
         expire_date = (datetime.datetime.now() + datetime.timedelta(days=duration_days)) if duration_days and duration_days > 0 else None
         purchase_id = _db_manager.add_purchase(
             user_id=user_db_info['id'], purchase_type=purchase_type, server_id=server_id,
-            profile_id=profile_id, plan_id=order_details.get('plan_details', {}).get('id'),
+            profile_id=profile_id, plan_id=order_details.get('plan_details', {}).get('id') or order_details.get('gb_plan_details', {}).get('id'),
             expire_date=expire_date.strftime("%Y-%m-%d %H:%M:%S") if expire_date else None,
             initial_volume_gb=total_gb, subscription_id=subscription_id,
             full_configs_json=json.dumps(full_configs)
         )
-        # --- پایان بخش اصلاح شده ---
 
         if not purchase_id:
             _bot.edit_message_caption("❌ خطا در ذخیره خرید در دیتابیس.", message.chat.id, message.message_id); return
