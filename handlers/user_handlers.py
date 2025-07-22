@@ -236,16 +236,15 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
         
         summary_text = messages.ORDER_SUMMARY_HEADER
         
-        # --- بخش اصلاح شده و حیاتی ---
-        # ابتدا نوع خرید را بررسی می‌کنیم
+        # FIX: Check for purchase_type before accessing server_id or profile_id
         if order_data.get('purchase_type') == 'server':
             server_info = _db_manager.get_server_by_id(order_data['server_id'])
             summary_text += messages.ORDER_SUMMARY_SERVER.format(server_name=server_info['name'])
         elif order_data.get('purchase_type') == 'profile':
             profile_info = _db_manager.get_profile_by_id(order_data['profile_id'])
             summary_text += f"🧬 **پروفایل:** `{profile_info['name']}`\n"
-        # --- پایان بخش اصلاح شده ---
 
+        # The rest of the function for calculating price and duration
         total_price = 0
         plan_details_for_admin = ""
         
