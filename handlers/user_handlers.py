@@ -80,8 +80,10 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
         if user_id not in _user_states:
             _user_states[user_id] = {'data': {}}
         if data == "buy_type_server":
+            _user_states[user_id]['data']['purchase_type'] = 'server' # <-- ثبت نوع خرید
             select_server_for_purchase(user_id, call.message)
         elif data == "buy_type_profile":
+            _user_states[user_id]['data']['purchase_type'] = 'profile' # <-- ثبت نوع خرید
             select_profile_for_purchase(user_id, call.message)
         
         elif data.startswith("buy_select_server_"):
