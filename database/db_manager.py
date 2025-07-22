@@ -886,28 +886,16 @@ class DatabaseManager:
     
     
     def get_purchase_by_subscription_id(self, subscription_id: str):
-        """
-        اطلاعات یک خرید را با استفاده از شناسه اشتراک (subscription_id) آن برمی‌گرداند.
-        """
-        conn = None
+        """اطلاعات یک خرید را با استفاده از شناسه اشتراک آن برمی‌گرداند."""
         try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM purchases WHERE subscription_id = ?", (subscription_id,))
-            purchase = cursor.fetchone()
-            if purchase:
-                purchase_dict = dict(purchase)
-                # ستون JSON را نیز برای استفاده آسان‌تر، دیکد می‌کنیم
-                if purchase_dict.get('full_configs_json'):
-                    purchase_dict['full_configs_json'] = json.loads(purchase_dict['full_configs_json'])
-                return purchase_dict
-            return None
-        except (sqlite3.Error, json.JSONDecodeError) as e:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM purchases WHERE subscription_id = ?", (subscription_id,))
+                purchase = cursor.fetchone()
+                return dict(purchase) if purchase else None
+        except sqlite3.Error as e:
             logger.error(f"Error getting purchase by subscription ID {subscription_id}: {e}")
             return None
-        finally:
-            if conn:
-                conn.close()
                 
                 
     def get_inbounds_for_profile(self, profile_id: int):
