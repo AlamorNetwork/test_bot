@@ -77,7 +77,8 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
         _bot.answer_callback_query(call.id)
         user_id = call.from_user.id
         data = call.data
-        
+        if user_id not in _user_states:
+            _user_states[user_id] = {'data': {}}
         if data == "buy_type_server":
             select_server_for_purchase(user_id, call.message)
         elif data == "buy_type_profile":
