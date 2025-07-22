@@ -113,6 +113,33 @@ def handle_zarinpal_callback():
     else:
         bot.send_message(user_telegram_id, "شما فرآیند پرداخت را لغو کردید. سفارش شما ناتمام باقی ماند.")
         return render_template('payment_status.html', status='error', message="تراکنش توسط شما لغو شد.", bot_username=BOT_USERNAME)
+import base64
 
+@app.route('/sub/<subscription_id>', methods=['GET'])
+def handle_subscription_request(subscription_id):
+    """محتوای لینک سابسکریپشن ترکیبی را به کاربر تحویل می‌دهد."""
+    logger.info(f"Subscription request received for ID: {subscription_id}")
+    purchase = db_manager.get_purchase_by_subscription_id(subscription_id)
+    
+    if not purchase or not purchase['is_active']:
+        return "Subscription not found or is inactive.", 404
+        
+    configs_json = purchase.get('full_configs_json')
+    if not configs_json:
+        return "", 204 # No Content
+
+    try:
+        config_list = json.loads(configs_json)
+        # استخراج لینک‌های vless/vmess از لیست دیکشنری‌ها
+        config_urls = [item['url'] for item in config_list if 'url' in item]
+        
+        # ترکیب لینک‌ها با خط جدید
+        combined_configs = "\n".join(config_urls)
+        
+        # انکود کردن به Base64 برای تحویل به اپلیکیشن
+        return base64.b64encode(combined_configs.encode('utf-8')).decode('utf-8')
+    except Exception as e:
+        logger.error(f"Error processing subscription ID {subscription_id}: {e}")
+        return "Internal Server Error", 500
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)

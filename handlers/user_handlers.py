@@ -85,7 +85,9 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
         elif data == "buy_type_profile":
             _user_states[user_id]['data']['purchase_type'] = 'profile' # <-- ثبت نوع خرید
             select_profile_for_purchase(user_id, call.message)
-        
+        elif data == "show_order_summary":
+        # این شرط جدید، دکمه بازگشت را مدیریت می‌کند
+            show_order_summary(user_id, call.message)
         elif data.startswith("buy_select_server_"):
             server_id = int(data.replace("buy_select_server_", ""))
             _user_states[user_id]['data']['purchase_type'] = 'server'

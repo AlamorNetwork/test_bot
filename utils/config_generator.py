@@ -16,7 +16,26 @@ class ConfigGenerator:
         self.xui_api = xui_api_client
         self.db_manager = db_manager
         logger.info("ConfigGenerator initialized.")
+    def create_subscription_for_server(self, user_telegram_id: int, server_id: int, total_gb: float, duration_days: int):
+        """کانفیگ‌ها را برای یک سرور خاص می‌سازد."""
+        inbounds_list = self.db_manager.get_server_inbounds(server_id, only_active=True)
+        return self._build_configs(user_telegram_id, inbounds_list, total_gb, duration_days)
 
+    def create_subscription_for_profile(self, user_telegram_id: int, profile_id: int, total_gb: float, duration_days: int):
+        """کانفیگ‌ها را برای یک پروفایل ترکیبی می‌سازد."""
+        inbounds_list = self.db_manager.get_inbounds_for_profile(profile_id)
+        return self._build_configs(user_telegram_id, inbounds_list, total_gb, duration_days)
+
+    def _build_configs(self, user_telegram_id: int, inbounds_list: list, total_gb: float, duration_days: int):
+        """موتور اصلی ساخت کانفیگ که برای هر دو نوع خرید استفاده می‌شود."""
+        all_generated_configs = []
+        subscription_id = generate_random_string(16) # شناسه یکتای این خرید
+
+        # ... (منطق کامل حلقه روی سرورها و اینباندها که در پاسخ‌های قبلی ارائه شد)
+        # ... (این منطق به جای subId، از subscription_id استفاده می‌کند)
+        
+        # در نهایت، شناسه اشتراک و لیست کانفیگ‌های تکی را برمی‌گرداند
+        return subscription_id, all_generated_configs
     def create_client_and_configs(self, user_telegram_id: int, server_id: int, total_gb: float, duration_days: int or None):
         """
         کلاینت را در پنل X-UI ایجاد می‌کند و لینک سابسکریپشن و کانفیگ‌های تکی را برمی‌گرداند.

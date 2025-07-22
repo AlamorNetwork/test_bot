@@ -878,4 +878,26 @@ class DatabaseManager:
         return inbound_map
     
     
-    
+    def get_purchase_by_subscription_id(self, subscription_id: str):
+        """
+        اطلاعات یک خرید را با استفاده از شناسه اشتراک (subscription_id) آن برمی‌گرداند.
+        """
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM purchases WHERE subscription_id = ?", (subscription_id,))
+            purchase = cursor.fetchone()
+            if purchase:
+                purchase_dict = dict(purchase)
+                # ستون JSON را نیز برای استفاده آسان‌تر، دیکد می‌کنیم
+                if purchase_dict.get('full_configs_json'):
+                    purchase_dict['full_configs_json'] = json.loads(purchase_dict['full_configs_json'])
+                return purchase_dict
+            return None
+        except (sqlite3.Error, json.JSONDecodeError) as e:
+            logger.error(f"Error getting purchase by subscription ID {subscription_id}: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
