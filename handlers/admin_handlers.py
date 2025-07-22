@@ -851,7 +851,7 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
     def start_add_profile_flow(admin_id, message):
         """فرآیند افزودن یک پروفایل جدید را آغاز می‌کند."""
         _clear_admin_state(admin_id)
-        prompt = _bot.edit_message_text("لطفاً یک نام برای پروفایل جدید وارد کنید:", admin_id, message.message.message_id)
+        prompt = _bot.edit_message_text("لطفاً یک نام برای پروفایل جدید وارد کنید:", admin_id, message.message_id)
         _admin_states[admin_id] = {'state': 'waiting_for_profile_name', 'prompt_message_id': prompt.message_id, 'data': {}}
 
     def list_profiles_for_management(admin_id, message):
