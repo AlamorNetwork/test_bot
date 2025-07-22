@@ -132,13 +132,15 @@ def get_server_selection_menu(servers: list):
     markup.add(types.InlineKeyboardButton("🔙 بازگشت به منو", callback_data="user_main_menu"))
     return markup
     
-def get_plan_type_selection_menu_user(server_id: int):
+def get_plan_type_selection_menu_user(back_callback: str):
+    """منوی انتخاب نوع پلن را برای کاربر با دکمه بازگشت داینامیک نمایش می‌دهد."""
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(
         types.InlineKeyboardButton("ماهانه (Fixed)", callback_data="buy_plan_type_fixed_monthly"),
         types.InlineKeyboardButton("حجمی (Gigabyte)", callback_data="buy_plan_type_gigabyte_based")
     )
-    markup.add(get_back_button(f"user_buy_service").keyboard[0][0]) # Add back button
+    # دکمه بازگشت به مرحله قبل (انتخاب سرور یا پروفایل)
+    markup.add(types.InlineKeyboardButton("🔙 بازگشت", callback_data=back_callback))
     return markup
 
 def get_fixed_plan_selection_menu(plans: list):

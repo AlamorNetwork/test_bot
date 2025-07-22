@@ -87,14 +87,20 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
             server_id = int(data.replace("buy_select_server_", ""))
             _user_states[user_id]['data']['purchase_type'] = 'server'
             _user_states[user_id]['data']['server_id'] = server_id
-            _bot.edit_message_text(messages.SELECT_PLAN_TYPE_PROMPT_USER, user_id, call.message.message_id, reply_markup=inline_keyboards.get_plan_type_selection_menu_user())
+            # --- بخش اصلاح شده ---
+            # ارسال callback صحیح برای دکمه بازگشت
+            _bot.edit_message_text(messages.SELECT_PLAN_TYPE_PROMPT_USER, user_id, call.message.message_id, 
+                                reply_markup=inline_keyboards.get_plan_type_selection_menu_user(back_callback="buy_type_server"))
 
         elif data.startswith("buy_select_profile_"):
             profile_id = int(data.replace("buy_select_profile_", ""))
+            _user_states[user_id]['data']['purchase_type'] = 'profile'
             _user_states[user_id]['data']['profile_id'] = profile_id
-            # پس از انتخاب پروفایل، به مرحله انتخاب نوع پلن می‌رویم
-            _bot.edit_message_text(messages.SELECT_PLAN_TYPE_PROMPT_USER, user_id, call.message.message_id, reply_markup=inline_keyboards.get_plan_type_selection_menu_user())
-
+            # --- بخش اصلاح شده ---
+            # ارسال callback صحیح برای دکمه بازگشت
+            _bot.edit_message_text(messages.SELECT_PLAN_TYPE_PROMPT_USER, user_id, call.message.message_id, 
+                                reply_markup=inline_keyboards.get_plan_type_selection_menu_user(back_callback="buy_type_profile"))
+        
         elif data.startswith("buy_plan_type_"):
             select_plan_type(user_id, data.replace("buy_plan_type_", ""), call.message)
         elif data.startswith("buy_select_plan_"):
