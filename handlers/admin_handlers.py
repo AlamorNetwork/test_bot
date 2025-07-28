@@ -591,16 +591,13 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         plan_type = order_details.get('plan_type')
 
         # --- تعیین هوشمند پارامترهای پلن ---
-        total_gb = 0
-        duration_days = 0
-        plan_id = None
+        total_gb, duration_days, plan_id = 0, 0, None
 
         if plan_type == 'fixed_monthly':
             plan = order_details.get('plan_details')
             if plan:
-                total_gb = plan.get('volume_gb')
-                duration_days = plan.get('duration_days')
-                plan_id = plan.get('id')
+                total_gb, duration_days, plan_id = plan.get('volume_gb'), plan.get('duration_days'), plan.get('id')
+                
         elif plan_type == 'gigabyte_based':
             # --- بخش اصلی اصلاح شده ---
             # بررسی می‌کنیم که آیا gb_plan_details یک لیست است یا دیکشنری
@@ -608,7 +605,7 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             gb_plan = gb_plan_data[0] if isinstance(gb_plan_data, list) and gb_plan_data else gb_plan_data
             # --- پایان بخش اصلاح شده ---
 
-            if gb_plan:
+            if gb_plan and isinstance(gb_plan, dict):
                 total_gb = order_details.get('requested_gb')
                 duration_days = gb_plan.get('duration_days', 0)
                 plan_id = gb_plan.get('id')
