@@ -30,3 +30,19 @@ SUPPORT_CHANNEL_LINK = os.getenv("SUPPORT_CHANNEL_LINK_ALAMOR")
 REQUIRED_CHANNEL_ID_STR = os.getenv("REQUIRED_CHANNEL_ID_ALAMOR")
 REQUIRED_CHANNEL_ID = int(REQUIRED_CHANNEL_ID_STR) if REQUIRED_CHANNEL_ID_STR and REQUIRED_CHANNEL_ID_STR.lstrip('-').isdigit() else None
 REQUIRED_CHANNEL_LINK = os.getenv("REQUIRED_CHANNEL_LINK_ALAMOR")
+
+
+def get_bool_env(var_name, default=False):
+    """یک مقدار بولی را از متغیرهای محیطی می‌خواند."""
+    value = os.getenv(var_name, str(default))
+    return value.lower() in ('true', '1', 't', 'y', 'yes')
+
+# --- Feature Flags (برای فعال/غیرفعال کردن قابلیت‌ها) ---
+ENABLE_SERVER_PURCHASE = get_bool_env("ENABLE_SERVER_PURCHASE", True)
+ENABLE_PROFILE_PURCHASE = get_bool_env("ENABLE_PROFILE_PURCHASE", True)
+ENABLE_FIXED_PLANS = get_bool_env("ENABLE_FIXED_PLANS", True)
+ENABLE_GIGABYTE_PLANS = get_bool_env("ENABLE_GIGABYTE_PLANS", True)
+
+# --- Zarinpal Settings (تنظیمات درگاه زرین‌پال) ---
+ZARINPAL_SANDBOX = get_bool_env("ZARINPAL_SANDBOX", True) # برای تست روی True و برای استفاده واقعی روی False تنظیم شود
+ZARINPAL_MERCHANT_ID = os.getenv("ZARINPAL_MERCHANT_ID")
