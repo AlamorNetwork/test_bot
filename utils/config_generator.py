@@ -9,6 +9,17 @@ from utils.helpers import generate_random_string
 
 logger = logging.getLogger(__name__)
 
+import json
+import logging
+import uuid
+import datetime
+from urllib.parse import quote
+import base64
+
+from utils.helpers import generate_random_string
+
+logger = logging.getLogger(__name__)
+
 class ConfigGenerator:
     def __init__(self, xui_api_client, db_manager):
         self.xui_api = xui_api_client
@@ -24,14 +35,10 @@ class ConfigGenerator:
         return self._build_configs(user_telegram_id, inbounds_list, total_gb, duration_days)
 
     def _build_configs(self, user_telegram_id: int, inbounds_list: list, total_gb: float, duration_days: int):
-        """موتور اصلی ساخت کانفیگ که برای هر دو نوع خرید استفاده می‌شود."""
         all_generated_configs = []
         subscription_id = generate_random_string(16)
         master_sub_id = generate_random_string(12)
-
-        # --- بخش جدید: برای ذخیره اطلاعات نماینده ---
         representative_client_details = {}
-        # ---
 
         inbounds_by_server = {}
         for inbound_info in inbounds_list:
@@ -58,13 +65,8 @@ class ConfigGenerator:
                 client_uuid = str(uuid.uuid4())
                 client_email = f"u{user_telegram_id}.{generate_random_string(6)}"
                 
-                # --- بخش جدید: ذخیره اولین کلاینت به عنوان نماینده ---
                 if not representative_client_details:
-                    representative_client_details = {
-                        'uuid': client_uuid,
-                        'email': client_email
-                    }
-                # ---
+                    representative_client_details = {'uuid': client_uuid, 'email': client_email}
 
                 client_settings = {
                     "id": client_uuid, "email": client_email, "flow": "",
@@ -84,20 +86,16 @@ class ConfigGenerator:
                     if single_config:
                         all_generated_configs.append(single_config)
         
-        if not all_generated_configs:
-            return None, None, None
-
-        # --- بخش اصلاح شده: بازگرداندن سه مقدار ---
-        return subscription_id, all_generated_configs, representative_client_details
-
+        return (subscription_id, all_generated_configs, representative_client_details) if all_generated_configs else (None, None, None)
 
     def _generate_single_config_url(self, client_uuid: str, server_data: dict, inbound_details: dict) -> dict or None:
-        """این تابع اکنون به طور کامل از VLESS/REALITY پشتیبانی می‌کند."""
+        """این تابع اکنون به طور کامل از VLESS/REALITY و WS/TLS پشتیبانی می‌کند."""
         try:
             protocol = inbound_details.get('protocol')
             remark = inbound_details.get('remark', f"Alamor-{server_data['name']}")
             address = server_data['subscription_base_url'].split('//')[1].split(':')[0].split('/')[0]
             port = inbound_details.get('port')
+            
             stream_settings = json.loads(inbound_details.get('streamSettings', '{}'))
             network = stream_settings.get('network', 'tcp')
             security = stream_settings.get('security', 'none')
@@ -105,23 +103,26 @@ class ConfigGenerator:
 
             if protocol == 'vless':
                 params = {'type': network, 'security': security}
+                
                 if security == 'xtls':
-                    params['flow'] = stream_settings.get('xtlsSettings', {}).get('flow', 'xtls-rprx-direct')
+                    xtls_settings = stream_settings.get('xtlsSettings', {})
+                    params['flow'] = xtls_settings.get('flow', 'xtls-rprx-direct')
                 elif security == 'reality':
                     reality_settings = stream_settings.get('realitySettings', {})
-                    # برای سازگاری با پنل‌های قدیمی، از tlsSettings هم می‌خوانیم
-                    tls_settings = stream_settings.get('tlsSettings', {})
-                    params['fp'] = reality_settings.get('fingerprint') or tls_settings.get('fingerprint')
-                    params['pbk'] = reality_settings.get('publicKey') or tls_settings.get('publicKey')
-                    params['sid'] = reality_settings.get('shortId') or tls_settings.get('shortId')
-                    params['sni'] = (reality_settings.get('serverNames') or tls_settings.get('serverNames', ['']))[0]
+                    params['fp'] = reality_settings.get('fingerprint', '')
+                    params['pbk'] = reality_settings.get('publicKey', '')
+                    params['sid'] = reality_settings.get('shortId', '')
+                    params['sni'] = reality_settings.get('serverNames', [''])[0]
                 
                 if network == 'ws':
                     ws_settings = stream_settings.get('wsSettings', {})
                     params['path'] = ws_settings.get('path', '/')
+                    # در ws، هدر Host به عنوان sni هم عمل می‌کند
                     params['host'] = ws_settings.get('headers', {}).get('Host', address)
-                
-                # حذف پارامترهای خالی قبل از ساخت لینک
+                    if security == 'tls' and not params.get('sni'):
+                         tls_settings = stream_settings.get('tlsSettings', {})
+                         params['sni'] = tls_settings.get('serverName', params['host'])
+
                 query_string = '&'.join([f"{k}={quote(str(v))}" for k, v in params.items() if v])
                 config_url = f"vless://{client_uuid}@{address}:{port}?{query_string}#{quote(remark)}"
             
@@ -130,7 +131,6 @@ class ConfigGenerator:
         except Exception as e:
             logger.error(f"Error in _generate_single_config_url: {e}")
         return None
-
     
     def create_client_and_configs(self, user_telegram_id: int, server_id: int, total_gb: float, duration_days: int or None):
         """
@@ -235,68 +235,4 @@ class ConfigGenerator:
         logger.info(f"Config generation successful. Sub link: {subscription_link}")
         return client_details_for_db, subscription_link, all_generated_configs
 
-    def _generate_single_config_url(self, client_uuid: str, server_data: dict, inbound_panel_details: dict) -> dict or None:
-        """
-        بر اساس جزئیات اینباند و کلاینت، یک کانفیگ تکی تولید می‌کند.
-        """
-        try:
-            protocol = inbound_panel_details.get('protocol')
-            remark = inbound_panel_details.get('remark', f"AlamorVPN-{server_data['name']}")
-            # آدرس تمیز شده (بدون http و پورت)
-            address = server_data['subscription_base_url'].split('//')[1].split(':')[0].split('/')[0]
-            port = inbound_panel_details.get('port')
-
-            stream_settings = json.loads(inbound_panel_details.get('streamSettings', '{}'))
-            network = stream_settings.get('network', 'tcp')
-            security = stream_settings.get('security', 'none')
-
-            config_url = ""
-            if protocol == 'vless':
-                flow = ""
-                if security == 'xtls':
-                    xtls_settings = stream_settings.get('xtlsSettings', {})
-                    flow = xtls_settings.get('flow', 'xtls-rprx-direct')
-
-                # Base URL
-                config_url = f"vless://{client_uuid}@{address}:{port}"
-                
-                # Parameters
-                params = {
-                    'type': network,
-                    'security': security,
-                    'flow': flow,
-                }
-
-                if network == 'ws':
-                    ws_settings = stream_settings.get('wsSettings', {})
-                    params['path'] = ws_settings.get('path', '/')
-                    params['host'] = ws_settings.get('headers', {}).get('Host', address)
-                elif network == 'grpc':
-                    grpc_settings = stream_settings.get('grpcSettings', {})
-                    params['serviceName'] = grpc_settings.get('serviceName', '')
-                
-                if security in ['tls', 'xtls', 'reality']:
-                    tls_settings = stream_settings.get('tlsSettings', {})
-                    params['sni'] = tls_settings.get('serverName', address)
-                    params['fp'] = tls_settings.get('fingerprint', '')
-                    if security == 'reality':
-                         params['pbk'] = tls_settings.get('publicKey', '')
-                         params['sid'] = tls_settings.get('shortId', '')
-
-                # Filter out empty params and join
-                query_string = '&'.join([f"{k}={quote(str(v))}" for k, v in params.items() if v])
-                config_url += f"?{query_string}#{quote(remark)}"
-
-            # Add other protocols like VMess if needed
-            
-            if config_url:
-                return {
-                    "remark": remark,
-                    "protocol": protocol,
-                    "network": network,
-                    "url": config_url
-                }
-        except Exception as e:
-            logger.error(f"Error generating single config URL: {e}", exc_info=True)
-            return None
-        return None
+    

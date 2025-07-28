@@ -72,44 +72,23 @@ class XuiAPIClient:
             return None
     
     def login(self):
-        """
-        تلاش برای ورود به پنل X-UI/3X-UI.
-        بررسی می‌کنیم که آیا کوکی سشن '3x-ui' ذخیره شده است.
-        """
+        self.session.cookies.clear()
         endpoint = "/login"
-        data = {
-            "username": self.username,
-            "password": self.password
-        }
-        if self.two_factor:
-            data["twoFactor"] = self.two_factor
+        data = {"username": self.username, "password": self.password}
         
         logger.info(f"Attempting to login to X-UI panel at {self.panel_url}...")
-        
         try:
             res = self.session.post(f"{self.panel_url}{endpoint}", json=data, verify=False, timeout=10) 
-            res.raise_for_status() 
-
+            res.raise_for_status()
             response_json = res.json()
-            
             if res.status_code == 200 and response_json.get("success"):
-                # این مهم است: به دنبال کوکی '3x-ui' می‌گردیم
-                if '3x-ui' in self.session.cookies: 
-                    logger.info("Successfully logged in to X-UI panel. '3x-ui' cookie found.")
+                if 'session' in self.session.cookies or '3x-ui' in self.session.cookies:
+                    logger.info("Successfully logged in to X-UI panel.")
                     return True
-                else:
-                    logger.warning("Login successful (API returned success) but no '3x-ui' cookie found in response.")
-                    # در این حالت، اگرچه API موفقیت را اعلام کرده، اما کوکی مورد نیاز برای احراز هویت را دریافت نکردیم.
-                    # ممکن است نیاز به بررسی دستی نام کوکی‌های دیگر در headers.
-                    return False
-            else:
-                logger.error(f"Failed to login to X-UI panel: API returned unsuccessful. Message: {response_json.get('msg', 'No message')}. Status Code: {res.status_code}")
-                return False
+            logger.error(f"Failed to login to X-UI panel. Message: {response_json.get('msg', 'Unknown error')}")
+            return False
         except requests.exceptions.RequestException as e:
             logger.error(f"Login request error: {e}")
-            return False
-        except json.JSONDecodeError:
-            logger.error(f"Failed to decode JSON response from login. Response text: {res.text}")
             return False
 
     def check_login(self):
@@ -123,34 +102,19 @@ class XuiAPIClient:
             return self.login()
 
     def list_inbounds(self):
-        if not self.check_login(): 
-            logger.error("Not logged in to X-UI. Cannot list inbounds.")
-            return []
-        
         endpoint = "/panel/api/inbounds/list"
-        response = self._make_request("GET", endpoint) 
-        
-        if response and response.get('success'):
-            logger.info("Successfully retrieved inbound list.")
-            return response.get('obj', [])
-        else:
-            logger.error(f"Failed to get inbound list. Response: {response}")
-            return []
+        response = self.session.post(f"{self.panel_url}{endpoint}", verify=False, timeout=15)
+        if response.status_code == 200 and response.json().get('success'):
+            return response.json().get('obj', [])
+        return []
+
 
     def get_inbound(self, inbound_id):
-        if not self.check_login():
-            logger.error("Not logged in to X-UI. Cannot get inbound details.")
-            return None
-        
         endpoint = f"/panel/api/inbounds/get/{inbound_id}"
-        response = self._make_request("GET", endpoint) 
-        
-        if response and response.get('success'):
-            logger.info(f"Successfully retrieved inbound details for ID {inbound_id}.")
-            return response.get('obj')
-        else:
-            logger.error(f"Failed to get inbound details for ID {inbound_id}. Response: {response}")
-            return None
+        response = self.session.post(f"{self.panel_url}{endpoint}", verify=False, timeout=15)
+        if response.status_code == 200 and response.json().get('success'):
+            return response.json().get('obj')
+        return None
             
     def add_inbound(self, data):
         if not self.check_login():
@@ -198,19 +162,9 @@ class XuiAPIClient:
             return False
 
     def add_client(self, data):
-        if not self.check_login():
-            logger.error("Not logged in to X-UI. Cannot add client.")
-            return False
-        
         endpoint = "/panel/api/inbounds/addClient"
-        response = self._make_request("POST", endpoint, data=data) 
-        
-        if response and response.get('success'):
-            logger.info(f"Client added successfully to inbound {data.get('id', 'N/A')}.")
-            return True
-        else:
-            logger.warning(f"Failed to add client to inbound {data.get('id', 'N/A')}: {response}")
-            return False
+        response = self.session.post(f"{self.panel_url}{endpoint}", json=data, verify=False, timeout=15)
+        return response.status_code == 200 and response.json().get('success')
 
     def delete_client(self, inbound_id, client_id):
         if not self.check_login():
@@ -380,72 +334,3 @@ class XuiAPIClient:
         
         
         
-# api_client/xui_api_client.py
-# ... (کل کد کلاس XuiAPIClient و بقیه توابع) ...
-
-if __name__ == "__main__":
-    import sys
-    import os
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from config import XUI_PANEL_URL, XUI_USERNAME, XUI_PASSWORD
-
-    print("\n--- Testing XuiAPIClient Login ---")
-    test_client = XuiAPIClient(
-        panel_url=XUI_PANEL_URL,
-        username=XUI_USERNAME,
-        password=XUI_PASSWORD
-    )
-
-    try:
-        # ارسال درخواست لاگین به صورت دستی و چاپ جزئیات پاسخ
-        login_url = f"{test_client.panel_url}/login"
-        login_data = {"username": test_client.username, "password": test_client.password}
-        print(f"Attempting POST request to: {login_url}")
-        print(f"Payload: {login_data}")
-
-        response = test_client.session.post(login_url, json=login_data, verify=False, timeout=10)
-        response.raise_for_status() # برای برانگیختن خطا در صورت کد وضعیت 4xx/5xx
-
-        print("\n--- Raw Response Details ---")
-        print(f"Status Code: {response.status_code}")
-        print(f"Response URL: {response.url}")
-        print(f"Response Headers:")
-        for k, v in response.headers.items():
-            print(f"  {k}: {v}")
-        print(f"Response Cookies:")
-        for k, v in response.cookies.items():
-            print(f"  {k}: {v}")
-        print(f"Response Body (JSON):")
-        try:
-            response_json = response.json()
-            print(json.dumps(response_json, indent=2))
-        except json.JSONDecodeError:
-            print("  (Not a valid JSON response)")
-            print(response.text)
-
-        print("\n--- Login Attempt Result ---")
-        if response.status_code == 200 and response_json.get("success"):
-            session_cookie_found = 'session' in test_client.session.cookies
-            obj_token_found = response_json.get('obj') is not None
-
-            print(f"API success field: {response_json.get('success')}")
-            print(f"Is 'session' cookie found in session.cookies? {session_cookie_found}")
-            print(f"Is 'obj' token found in response JSON? {obj_token_found}")
-
-            if session_cookie_found or obj_token_found:
-                print("Login successful! Session cookie or obj token detected.")
-            else:
-                print("Login successful (API returned success) but no expected 'session' cookie or 'obj' token found.")
-                print("Please inspect the 'Response Headers' and 'Response Body (JSON)' above for the actual session/token key.")
-        else:
-            print(f"Login failed. API returned unsuccessful. Message: {response_json.get('msg', response.text)}")
-
-    except requests.exceptions.RequestException as e:
-        print(f"\n--- Login Request Error ---")
-        print(f"An error occurred during login request: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Error Response Status: {e.response.status_code}")
-            print(f"Error Response Text: {e.response.text}")
-    except Exception as e:
-        print(f"\n--- Unexpected Error ---")
-        print(f"An unexpected error occurred: {e}")

@@ -314,26 +314,7 @@ class DatabaseManager:
             logger.error(f"Error getting inbounds for server {server_id}: {e}")
             return []
 
-    def update_server_inbounds(self, server_id, selected_inbounds: list):
-        try:
-            with self._get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("DELETE FROM server_inbounds WHERE server_id = %s", (server_id,))
-                    if selected_inbounds:
-                        inbounds_to_insert = [
-                            (server_id, inbound['id'], inbound['remark'], True)
-                            for inbound in selected_inbounds
-                        ]
-                        execute_values(cursor, """
-                            INSERT INTO server_inbounds (server_id, inbound_id, remark, is_active)
-                            VALUES %s
-                        """, inbounds_to_insert)
-                    conn.commit()
-                    logger.info(f"Updated inbounds for server ID {server_id}.")
-                    return True
-        except psycopg2.Error as e:
-            logger.error(f"Error updating inbounds for server ID {server_id}: {e}")
-            return False
+    
 
     # --- توابع پلن‌ها ---
     def add_plan(self, name, plan_type, volume_gb, duration_days, price, per_gb_price):
@@ -768,3 +749,29 @@ class DatabaseManager:
         except psycopg2.Error as e:
             logger.error(f"Error getting inbounds for profile {profile_id}: {e}")
             return []
+        
+        
+        
+    def update_server_inbounds(self, server_id: int, inbounds_from_panel: list):
+        """لیست اینباندهای یک سرور را در دیتابیس آپدیت یا اضافه می‌کند."""
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # دریافت اینباندهای موجود در دیتابیس
+                    cursor.execute("SELECT inbound_id FROM server_inbounds WHERE server_id = %s", (server_id,))
+                    existing_inbounds = {row[0] for row in cursor.fetchall()}
+                    
+                    # اضافه کردن اینباندهای جدید
+                    new_inbounds = []
+                    for inbound in inbounds_from_panel:
+                        if inbound['id'] not in existing_inbounds:
+                            new_inbounds.append((server_id, inbound['id'], inbound['remark']))
+                    
+                    if new_inbounds:
+                        execute_values(cursor, "INSERT INTO server_inbounds (server_id, inbound_id, remark) VALUES %s", new_inbounds)
+                        conn.commit()
+                        logger.info(f"Added {len(new_inbounds)} new inbounds for server {server_id}.")
+            return True
+        except psycopg2.Error as e:
+            logger.error(f"Error updating server inbounds for server {server_id}: {e}")
+            return False
