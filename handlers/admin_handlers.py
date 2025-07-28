@@ -478,15 +478,23 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
     # =============================================================================
 
     def _generate_server_list_text():
-        servers = _db_manager.get_all_servers()
+        servers = _db_manager.get_all_servers(only_active=False) # همه سرورها را نشان می‌دهیم
         if not servers: return messages.NO_SERVERS_FOUND
+        
         response_text = messages.LIST_SERVERS_HEADER
         for s in servers:
             status = "✅ آنلاین" if s['is_online'] else "❌ آفلاین"
             is_active_emoji = "✅" if s['is_active'] else "❌"
+            # --- بخش اصلاح شده ---
+            # لینک دیگر escape نمی‌شود
             sub_link = f"{s['subscription_base_url'].rstrip('/')}/{s['subscription_path_prefix'].strip('/')}/<SUB_ID>"
+            # --- پایان بخش اصلاح شده ---
             response_text += messages.SERVER_DETAIL_TEMPLATE.format(
-                name=helpers.escape_markdown_v1(s['name']), id=s['id'], status=status, is_active_emoji=is_active_emoji, sub_link=helpers.escape_markdown_v1(sub_link)
+                name=helpers.escape_markdown_v1(s['name']), 
+                id=s['id'], 
+                status=status, 
+                is_active_emoji=is_active_emoji, 
+                sub_link=sub_link # استفاده از لینک اصلاح شده
             )
         return response_text
 

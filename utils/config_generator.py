@@ -30,6 +30,8 @@ class ConfigGenerator:
     def _build_configs(self, user_telegram_id: int, inbounds_list: list, total_gb: float, duration_days: int):
             """موتور اصلی ساخت کانفیگ که برای هر دو نوع خرید استفاده می‌شود."""
             all_generated_configs = []
+            master_sub_id = generate_random_string(12) 
+    # این شناسه جدید، مخصوص لینک سابسکریپشن اختصاصی ماست
             subscription_id = generate_random_string(16)
 
             inbounds_by_server = {}
@@ -59,7 +61,8 @@ class ConfigGenerator:
                     client_settings = {
                         "id": client_uuid, "email": client_email, "flow": "",
                         "totalGB": total_traffic_bytes, "expiryTime": int(expiry_time_ms),
-                        "enable": True, "tgId": str(user_telegram_id), "subId": "",
+                        "enable": True, "tgId": str(user_telegram_id), 
+                        "subId": master_sub_id, # <-- استفاده از شناسه مشترک
                     }
                     
                     add_client_payload = {"id": s_inbound['inbound_id'], "settings": json.dumps({"clients": [client_settings]})}

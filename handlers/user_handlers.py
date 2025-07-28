@@ -508,16 +508,37 @@ def register_user_handlers(bot_instance, db_manager_instance, xui_api_instance):
             _bot.edit_message_text(messages.OPERATION_FAILED, user_id, message.message_id)
     def send_single_configs(user_id, purchase_id):
         purchase = _db_manager.get_purchase_by_id(purchase_id)
-        if not purchase or not purchase['single_configs_json']:
+        if not purchase or not purchase.get('full_configs_json'):
             _bot.send_message(user_id, messages.NO_SINGLE_CONFIGS_AVAILABLE)
             return
             
-        configs = purchase['single_configs_json']
-        text = messages.SINGLE_CONFIG_HEADER
-        for config in configs:
-            text += f"**{config['remark']} ({config['protocol']}/{config['network']})**:\n`{config['url']}`\n\n"
-        
-        _bot.send_message(user_id, text, parse_mode='Markdown')
+        try:
+            # --- بخش اصلی اصلاح شده ---
+            # خواندن و پارس کردن صحیح از ستون جدید
+            configs_list = json.loads(purchase['full_configs_json'])
+            if not configs_list:
+                _bot.send_message(user_id, messages.NO_SINGLE_CONFIGS_AVAILABLE)
+                return
+
+            text = messages.SINGLE_CONFIG_HEADER
+            for config_item in configs_list:
+                # استخراج اطلاعات از هر دیکشنری در لیست
+                remark = config_item.get('remark', 'N/A')
+                url = config_item.get('url')
+                if url:
+                    text += f"**{helpers.escape_markdown_v1(remark)}**:\n`{url}`\n\n"
+            # --- پایان بخش اصلاح شده ---
+            
+            # برای جلوگیری از طولانی شدن بیش از حد پیام، آن را در چند بخش ارسال می‌کنیم
+            if len(text) > 4096:
+                for x in range(0, len(text), 4096):
+                    _bot.send_message(user_id, text[x:x+4096], parse_mode='Markdown')
+            else:
+                _bot.send_message(user_id, text, parse_mode='Markdown')
+
+        except (json.JSONDecodeError, AttributeError) as e:
+            logger.error(f"Error parsing single configs for purchase {purchase_id}: {e}")
+            _bot.send_message(user_id, messages.OPERATION_FAILED)
         
         
     # در فایل handlers/user_handlers.py
