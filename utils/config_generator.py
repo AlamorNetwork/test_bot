@@ -24,9 +24,14 @@ class ConfigGenerator:
         return self._build_configs(user_telegram_id, inbounds_list, total_gb, duration_days)
 
     def _build_configs(self, user_telegram_id: int, inbounds_list: list, total_gb: float, duration_days: int):
+        """موتور اصلی ساخت کانفیگ که برای هر دو نوع خرید استفاده می‌شود."""
         all_generated_configs = []
         subscription_id = generate_random_string(16)
         master_sub_id = generate_random_string(12)
+
+        # --- بخش جدید: برای ذخیره اطلاعات نماینده ---
+        representative_client_details = {}
+        # ---
 
         inbounds_by_server = {}
         for inbound_info in inbounds_list:
@@ -42,19 +47,25 @@ class ConfigGenerator:
             api_client = self.xui_api(panel_url=server_data['panel_url'], username=server_data['username'], password=server_data['password'])
             if not api_client.login(): continue
 
-            # --- بخش اصلاح شده: محاسبه صحیح حجم و زمان ---
             expiry_time_ms = 0
             if duration_days and duration_days > 0:
                 expire_date = datetime.datetime.now() + datetime.timedelta(days=duration_days)
                 expiry_time_ms = int(expire_date.timestamp() * 1000)
             
             total_traffic_bytes = int(total_gb * (1024**3)) if total_gb and total_gb > 0 else 0
-            # --- پایان بخش اصلاح شده ---
 
             for s_inbound in inbounds:
                 client_uuid = str(uuid.uuid4())
                 client_email = f"u{user_telegram_id}.{generate_random_string(6)}"
                 
+                # --- بخش جدید: ذخیره اولین کلاینت به عنوان نماینده ---
+                if not representative_client_details:
+                    representative_client_details = {
+                        'uuid': client_uuid,
+                        'email': client_email
+                    }
+                # ---
+
                 client_settings = {
                     "id": client_uuid, "email": client_email, "flow": "",
                     "totalGB": total_traffic_bytes, "expiryTime": expiry_time_ms,
@@ -73,7 +84,12 @@ class ConfigGenerator:
                     if single_config:
                         all_generated_configs.append(single_config)
         
-        return (subscription_id, all_generated_configs) if all_generated_configs else (None, None)
+        if not all_generated_configs:
+            return None, None, None
+
+        # --- بخش اصلاح شده: بازگرداندن سه مقدار ---
+        return subscription_id, all_generated_configs, representative_client_details
+
 
     def _generate_single_config_url(self, client_uuid: str, server_data: dict, inbound_details: dict) -> dict or None:
         """این تابع اکنون به طور کامل از VLESS/REALITY پشتیبانی می‌کند."""
