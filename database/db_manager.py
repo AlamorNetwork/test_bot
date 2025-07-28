@@ -36,7 +36,7 @@ class DatabaseManager:
         return self.fernet.decrypt(encrypted_data.encode('utf-8')).decode('utf-8')
 
     def create_tables(self):
-        """Creates the necessary tables in the PostgreSQL database."""
+        """جداول لازم را در دیتابیس PostgreSQL ایجاد می‌کند."""
         commands = [
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -76,17 +76,27 @@ class DatabaseManager:
             )""",
             """
             CREATE TABLE IF NOT EXISTS purchases (
-                id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
-                purchase_type TEXT NOT NULL DEFAULT 'server', server_id INTEGER REFERENCES servers(id),
-                profile_id INTEGER REFERENCES profiles(id), plan_id INTEGER REFERENCES plans(id),
-                purchase_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, expire_date TIMESTAMPTZ,
-                initial_volume_gb REAL NOT NULL, subscription_id TEXT UNIQUE, full_configs_json TEXT,
-                is_active BOOLEAN DEFAULT TRUE
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            purchase_type TEXT NOT NULL DEFAULT 'server',
+            server_id INTEGER REFERENCES servers(id),
+            profile_id INTEGER REFERENCES profiles(id),
+            plan_id INTEGER REFERENCES plans(id),
+            purchase_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            expire_date TIMESTAMPTZ,
+            initial_volume_gb REAL NOT NULL,
+            subscription_id TEXT UNIQUE,
+            full_configs_json TEXT,
+            xui_client_uuid TEXT,      -- ستون جدید
+            xui_client_email TEXT,     -- ستون جدید
+            single_configs_json TEXT,  -- ستون جدید
+            is_active BOOLEAN DEFAULT TRUE
             )""",
             """
             CREATE TABLE IF NOT EXISTS payments (
                 id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), amount REAL NOT NULL,
                 payment_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, receipt_message_id BIGINT,
+                receipt_message_id TEXT , 
                 is_confirmed BOOLEAN DEFAULT FALSE, admin_confirmed_by INTEGER,
                 confirmation_date TIMESTAMPTZ, order_details_json TEXT,
                 admin_notification_message_id BIGINT, authority TEXT, ref_id TEXT
@@ -624,15 +634,17 @@ class DatabaseManager:
             return False
             
     def get_all_profiles(self, only_active=True):
+        """تمام پروفایل‌ها را از دیتابیس دریافت می‌کند."""
         try:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=DictCursor) as cursor:
                     query = "SELECT * FROM profiles"
                     if only_active:
                         query += " WHERE is_active = TRUE"
+                    query += " ORDER BY id DESC"
                     cursor.execute(query)
-                    return cursor.fetchall()
-        except Exception as e:
+                    return [dict(p) for p in cursor.fetchall()]
+        except psycopg2.Error as e:
             logger.error(f"Error getting all profiles: {e}")
             return []
                 

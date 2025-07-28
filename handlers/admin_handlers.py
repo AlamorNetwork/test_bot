@@ -866,13 +866,17 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         _admin_states[admin_id] = {'state': 'waiting_for_profile_name', 'prompt_message_id': prompt.message_id, 'data': {}}
 
     def list_profiles_for_management(admin_id, message):
-        """Shows a list of profiles for the admin to manage."""
+        """لیست پروفایل‌ها را برای مدیریت نمایش می‌دهد."""
         profiles = _db_manager.get_all_profiles(only_active=False)
         if not profiles:
-            _bot.edit_message_text("هیچ پروفایلی یافت نشد. لطفاً ابتدا یک پروفایل بسازید.", admin_id, message.message_id, reply_markup=inline_keyboards.get_back_button("admin_profile_management"))
+            _bot.edit_message_text(
+                "هیچ پروفایلی یافت نشد. لطفاً ابتدا یک پروفایل بسازید.",
+                admin_id,
+                message.message_id,
+                reply_markup=inline_keyboards.get_back_button("admin_profile_management")
+            )
             return
         
-        # FIX: Corrected message.message_id
         _bot.edit_message_text(
             "کدام پروفایل را می‌خواهید مدیریت کنید؟",
             admin_id,
