@@ -110,11 +110,30 @@ class XuiAPIClient:
 
 
     def get_inbound(self, inbound_id):
+        """Gets the details of a specific inbound, now with robust error handling."""
         endpoint = f"/panel/api/inbounds/get/{inbound_id}"
-        response = self.session.post(f"{self.panel_url}{endpoint}", verify=False, timeout=15)
-        if response.status_code == 200 and response.json().get('success'):
-            return response.json().get('obj')
+        # This function might not be standard in all X-UI versions,
+        # so we use the more general _make_request for its retry logic.
+        response_data = self._make_request("POST", endpoint)
+
+        if response_data and response_data.get('success'):
+            return response_data.get('obj')
+
+        # Fallback for older panel versions or errors
+        logger.warning(f"Could not get single inbound {inbound_id}. Falling back to list.")
+        try:
+            all_inbounds = self.list_inbounds()
+            if all_inbounds:
+                for inbound in all_inbounds:
+                    if inbound.get('id') == inbound_id:
+                        logger.info(f"Found inbound {inbound_id} via list fallback.")
+                        return inbound
+        except Exception as e:
+            logger.error(f"Error during get_inbound fallback: {e}")
+
+        logger.error(f"Failed to get details for inbound {inbound_id} after all attempts.")
         return None
+
             
     def add_inbound(self, data):
         if not self.check_login():

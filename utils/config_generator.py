@@ -28,11 +28,10 @@ class ConfigGenerator:
     def _build_configs(self, user_telegram_id: int, inbounds_list: list, total_gb: float, duration_days: int):
         all_generated_configs = []
         
-        # --- FIX: Generate IDs ONCE per subscription ---
-        webhook_subscription_id = generate_random_string(16) # This is for the subscription URL
+        webhook_subscription_id = generate_random_string(16)
         master_client_uuid = str(uuid.uuid4())
         master_client_email = f"u{user_telegram_id}.{generate_random_string(6)}"
-        master_xui_sub_id = generate_random_string(12) # This is for grouping clients inside X-UI panel
+        master_xui_sub_id = generate_random_string(12)
         
         client_details_for_db = {
             'uuid': master_client_uuid,
@@ -53,6 +52,12 @@ class ConfigGenerator:
 
             api_client = self.xui_api(panel_url=server_data['panel_url'], username=server_data['username'], password=server_data['password'])
             if not api_client.login(): continue
+            
+            # --- FIX: Get all inbound details once and store in a dictionary ---
+            panel_inbounds_details = {i['id']: i for i in api_client.list_inbounds()}
+            if not panel_inbounds_details:
+                logger.error(f"Could not retrieve any inbound details from server {server_id}.")
+                continue
 
             expiry_time_ms = 0
             if duration_days and duration_days > 0:
@@ -62,16 +67,10 @@ class ConfigGenerator:
             total_traffic_bytes = int(total_gb * (1024**3)) if total_gb and total_gb > 0 else 0
 
             for s_inbound in inbounds:
-                # --- FIX: Use the MASTER UUID and Email for all clients in the subscription ---
                 client_settings = {
-                    "id": master_client_uuid,
-                    "email": master_client_email,
-                    "flow": "",
-                    "totalGB": total_traffic_bytes,
-                    "expiryTime": expiry_time_ms,
-                    "enable": True,
-                    "tgId": str(user_telegram_id),
-                    "subId": master_xui_sub_id,
+                    "id": master_client_uuid, "email": master_client_email, "flow": "",
+                    "totalGB": total_traffic_bytes, "expiryTime": expiry_time_ms,
+                    "enable": True, "tgId": str(user_telegram_id), "subId": master_xui_sub_id,
                 }
                 
                 add_client_payload = {"id": s_inbound['inbound_id'], "settings": json.dumps({"clients": [client_settings]})}
@@ -80,68 +79,13 @@ class ConfigGenerator:
                     logger.error(f"Failed to add client to inbound {s_inbound['inbound_id']} on server {server_id}.")
                     continue
 
-                inbound_details = api_client.get_inbound(s_inbound['inbound_id'])
+                # --- FIX: Use the details from the dictionary instead of a new API call ---
+                inbound_details = panel_inbounds_details.get(s_inbound['inbound_id'])
                 if inbound_details:
-                    # --- FIX: Pass the master UUID to generate the URL ---
                     single_config = self._generate_single_config_url(master_client_uuid, server_data, inbound_details)
                     if single_config:
                         all_generated_configs.append(single_config)
-        
-        # Return all necessary IDs clearly
+                else:
+                    logger.warning(f"Details for inbound ID {s_inbound['inbound_id']} not found in the list from panel.")
+
         return (webhook_subscription_id, all_generated_configs, client_details_for_db) if all_generated_configs else (None, None, None)
-
-    def _generate_single_config_url(self, client_uuid: str, server_data: dict, inbound_details: dict) -> dict or None:
-        """This function now correctly handles various VLESS configurations."""
-        try:
-            protocol = inbound_details.get('protocol')
-            remark = inbound_details.get('remark', f"Alamor-{server_data['name']}")
-            address = server_data['subscription_base_url'].split('//')[1].split(':')[0].split('/')[0]
-            port = inbound_details.get('port')
-            
-            stream_settings = json.loads(inbound_details.get('streamSettings', '{}'))
-            network = stream_settings.get('network', 'tcp')
-            security = stream_settings.get('security', 'none')
-            config_url = ""
-
-            if protocol == 'vless':
-                params = {'type': network}
-                
-                # Handling security settings
-                if security in ['tls', 'xtls', 'reality']:
-                    params['security'] = security
-                
-                if security == 'reality':
-                    reality_settings = stream_settings.get('realitySettings', {})
-                    params['fp'] = reality_settings.get('fingerprint', '')
-                    params['pbk'] = reality_settings.get('publicKey', '')
-                    params['sid'] = reality_settings.get('shortId', '')
-                    # Use serverNames[0] as SNI
-                    params['sni'] = reality_settings.get('serverNames', [''])[0]
-                
-                if security == 'tls' or network == 'ws': # SNI is needed for TLS or WS+TLS
-                    tls_settings = stream_settings.get('tlsSettings', {})
-                    params['sni'] = tls_settings.get('serverName', address)
-
-                if network == 'ws':
-                    ws_settings = stream_settings.get('wsSettings', {})
-                    params['path'] = ws_settings.get('path', '/')
-                    # In ws, the 'Host' header is crucial
-                    params['host'] = ws_settings.get('headers', {}).get('Host', address)
-                    if security == 'tls': # Override SNI with Host header if it exists for ws+tls
-                        params['sni'] = params['host']
-
-                if security == 'xtls':
-                    xtls_settings = stream_settings.get('xtlsSettings', {})
-                    params['flow'] = xtls_settings.get('flow', 'xtls-rprx-direct')
-
-                query_string = '&'.join([f"{k}={quote(str(v))}" for k, v in params.items() if v])
-                config_url = f"vless://{client_uuid}@{address}:{port}?{query_string}#{quote(remark)}"
-            
-            if config_url:
-                return {"remark": remark, "url": config_url}
-        except Exception as e:
-            logger.error(f"Error in _generate_single_config_url: {e}")
-        return None
-    
-    # Note: The 'create_client_and_configs' function seems unused based on the call from admin_handlers,
-    # but if it is used elsewhere, it should also be refactored to use the same logic as '_build_configs'.
