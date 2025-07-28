@@ -107,3 +107,8 @@ ENABLE_FIXED_PLANS = os.getenv("ENABLE_FIXED_PLANS", "True").lower() in ['true',
 # برای نمایش پلن‌های "گیگابایتی" این را True قرار دهید
 ENABLE_GIGABYTE_PLANS = os.getenv("ENABLE_GIGABYTE_PLANS", "True").lower() in ['true', '1', 't']
 
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST", "localhost") # مقدار پیش‌فرض 'localhost' است
+DB_PORT = os.getenv("DB_PORT", "5432") 
