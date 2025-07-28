@@ -581,7 +581,8 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
         _bot.edit_message_caption("⏳ در حال ساخت و فعال‌سازی سرویس...", message.chat.id, message.message_id)
         payment = _db_manager.get_payment_by_id(payment_id)
         if not payment or payment['is_confirmed']:
-            _bot.answer_callback_query(message.id, "این پرداخت قبلاً پردازش شده است.", show_alert=True); return
+            _bot.answer_callback_query(message.id, "این پرداخت قبلاً پردازش شده است.", show_alert=True)
+            return
 
         order_details = json.loads(payment['order_details_json'])
         user_telegram_id = order_details['user_telegram_id']
@@ -592,42 +593,40 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
 
         # --- تعیین هوشمند پارامترهای پلن ---
         total_gb, duration_days, plan_id = 0, 0, None
-
         if plan_type == 'fixed_monthly':
             plan = order_details.get('plan_details')
             if plan:
                 total_gb, duration_days, plan_id = plan.get('volume_gb'), plan.get('duration_days'), plan.get('id')
-                
         elif plan_type == 'gigabyte_based':
-            # --- بخش اصلی اصلاح شده ---
-            # بررسی می‌کنیم که آیا gb_plan_details یک لیست است یا دیکشنری
-            gb_plan_data = order_details.get('gb_plan_details')
-            gb_plan = gb_plan_data[0] if isinstance(gb_plan_data, list) and gb_plan_data else gb_plan_data
-            # --- پایان بخش اصلاح شده ---
-
+            gb_plan = order_details.get('gb_plan_details')
+            gb_plan = gb_plan[0] if isinstance(gb_plan, list) and gb_plan else gb_plan
             if gb_plan and isinstance(gb_plan, dict):
                 total_gb = order_details.get('requested_gb')
                 duration_days = gb_plan.get('duration_days', 0)
                 plan_id = gb_plan.get('id')
 
-        # --- فراخوانی موتور ساخت کانفیگ بر اساس نوع خرید ---
-        subscription_id, full_configs = None, None
+        # --- فراخوانی موتور ساخت کانفیگ و دریافت تمام اطلاعات ---
+        subscription_id, full_configs, client_details = None, None, None # مقداردهی اولیه
         server_id, profile_id = None, None
 
         if purchase_type == 'profile':
             profile_id = order_details.get('profile_id')
             if profile_id:
-                subscription_id, full_configs = _config_generator.create_subscription_for_profile(user_telegram_id, profile_id, total_gb, duration_days)
-        else: # حالت پیش‌فرض یا 'server'
+                subscription_id, full_configs, client_details = _config_generator.create_subscription_for_profile(
+                    user_telegram_id, profile_id, total_gb, duration_days
+                )
+        else: # حالت پیش‌فرض 'server'
             server_id = order_details.get('server_id')
             if server_id:
-                subscription_id, full_configs = _config_generator.create_subscription_for_server(user_telegram_id, server_id, total_gb, duration_days)
+                subscription_id, full_configs, client_details = _config_generator.create_subscription_for_server(
+                    user_telegram_id, server_id, total_gb, duration_days
+                )
 
-        if not subscription_id or not full_configs:
-            _bot.edit_message_caption("❌ خطا در ساخت کانفیگ‌ها در پنل X-UI. لطفاً تنظیمات سرور و اینباندها را بررسی کنید.", message.chat.id, message.message_id, reply_markup=inline_keyboards.get_back_button("admin_main_menu"))
+        if not subscription_id or not full_configs or not client_details:
+            _bot.edit_message_caption("❌ خطا در ساخت کانفیگ‌ها در پنل X-UI.", message.chat.id, message.message_id)
             return
         
-        # --- ثبت نهایی خرید در دیتابیس ---
+        # --- ثبت نهایی خرید با تمام پارامترهای لازم ---
         expire_date = (datetime.datetime.now() + datetime.timedelta(days=duration_days)) if duration_days and duration_days > 0 else None
         
         purchase_id = _db_manager.add_purchase(
@@ -639,11 +638,15 @@ def register_admin_handlers(bot_instance, db_manager_instance, xui_api_instance)
             expire_date=expire_date.strftime("%Y-%m-%d %H:%M:%S") if expire_date else None,
             initial_volume_gb=total_gb, 
             subscription_id=subscription_id,
-            full_configs_json=json.dumps(full_configs)
+            full_configs_json=json.dumps(full_configs),
+            xui_client_uuid=client_details.get('uuid'),
+            xui_client_email=client_details.get('email'),
+            single_configs_json=json.dumps(full_configs) # ستون قدیمی را نیز با اطلاعات جدید پر می‌کنیم
         )
 
         if not purchase_id:
-            _bot.edit_message_caption("❌ خطا در ذخیره خرید در دیتابیس.", message.chat.id, message.message_id); return
+            _bot.edit_message_caption("❌ خطا در ذخیره خرید در دیتابیس.", message.chat.id, message.message_id)
+            return
             
         _db_manager.update_payment_status(payment_id, True, admin_id)
         
