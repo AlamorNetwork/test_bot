@@ -87,3 +87,55 @@ class ConfigGenerator:
                     logger.warning(f"Details for inbound ID {s_inbound['inbound_id']} not found.")
 
         return (webhook_subscription_id, all_generated_configs, client_details_for_db) if all_generated_configs else (None, None, None)
+    
+    
+    def _generate_single_config_url(self, client_uuid: str, server_data: dict, inbound_details: dict) -> dict or None:
+        """This function now correctly handles various VLESS configurations."""
+        try:
+            protocol = inbound_details.get('protocol')
+            remark = inbound_details.get('remark', f"Alamor-{server_data['name']}")
+            # آدرس را از subscription_base_url استخراج می‌کنیم
+            address = server_data['subscription_base_url'].split('//')[1].split(':')[0].split('/')[0]
+            port = inbound_details.get('port')
+            
+            stream_settings = json.loads(inbound_details.get('streamSettings', '{}'))
+            network = stream_settings.get('network', 'tcp')
+            security = stream_settings.get('security', 'none')
+            config_url = ""
+
+            if protocol == 'vless':
+                params = {'type': network}
+                
+                if security in ['tls', 'xtls', 'reality']:
+                    params['security'] = security
+                
+                if security == 'reality':
+                    reality_settings = stream_settings.get('realitySettings', {})
+                    params['fp'] = reality_settings.get('fingerprint', '')
+                    params['pbk'] = reality_settings.get('publicKey', '')
+                    params['sid'] = reality_settings.get('shortId', '')
+                    params['sni'] = reality_settings.get('serverNames', [''])[0]
+                
+                if security == 'tls':
+                    tls_settings = stream_settings.get('tlsSettings', {})
+                    params['sni'] = tls_settings.get('serverName', address)
+
+                if network == 'ws':
+                    ws_settings = stream_settings.get('wsSettings', {})
+                    params['path'] = ws_settings.get('path', '/')
+                    params['host'] = ws_settings.get('headers', {}).get('Host', address)
+                    if security == 'tls':
+                        params['sni'] = params['host']
+
+                if security == 'xtls':
+                    xtls_settings = stream_settings.get('xtlsSettings', {})
+                    params['flow'] = xtls_settings.get('flow', 'xtls-rprx-direct')
+
+                query_string = '&'.join([f"{k}={quote(str(v))}" for k, v in params.items() if v])
+                config_url = f"vless://{client_uuid}@{address}:{port}?{query_string}#{quote(remark)}"
+            
+            if config_url:
+                return {"remark": remark, "url": config_url}
+        except Exception as e:
+            logger.error(f"Error in _generate_single_config_url: {e}")
+        return None
