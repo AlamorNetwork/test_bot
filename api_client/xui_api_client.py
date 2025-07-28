@@ -1,105 +1,113 @@
-# api_client/xui_api_client.py
+# api_client/xui_api_client.py (نسخه جدید بر اساس مستندات Postman)
 
 import requests
-import urllib3
 import json
 import logging
-import time
 
-# This import should come from config, ensure it exists
-# from config import MAX_API_RETRIES
-# Fallback if the import fails
-try:
-    from config import MAX_API_RETRIES
-except ImportError:
-    MAX_API_RETRIES = 3
+# غیرفعال کردن هشدارهای مربوط به SSL
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 logger = logging.getLogger(__name__)
 
 class XuiAPIClient:
+    """
+    یک کلاینت API قوی و بازنویسی شده برای پنل‌های 3X-UI
+    که بر اساس مستندات رسمی Postman ساخته شده است.
+    """
     def __init__(self, panel_url, username, password):
-        self.panel_url = panel_url.rstrip('/')
+        self.base_url = panel_url.rstrip('/')
         self.username = username
         self.password = password
         self.session = requests.Session()
-        self.session.headers.update({"Content-Type": "application/json", "Accept": "application/json"})
-        logger.info(f"XuiAPIClient initialized for {self.panel_url}")
+        self.session.headers.update({'Accept': 'application/json'})
+        self.is_logged_in = False
+        logger.info(f"XuiAPIClient initialized for {self.base_url}")
 
-    def _make_request(self, method, endpoint, data=None, retries=0):
-        url = f"{self.panel_url}{endpoint}"
+    def _request(self, method, path, **kwargs):
+        """یک متد مرکزی و قوی برای ارسال تمام درخواست‌ها."""
+        if not path.startswith('/'):
+            path = '/' + path
+        
+        # اگر لاگین نکرده بودیم (به جز برای خود api لاگین)، ابتدا لاگین کن
+        if not self.is_logged_in and path != '/login':
+            if not self.login():
+                return None # اگر لاگین ناموفق بود، درخواست را ادامه نده
+
+        url = self.base_url + path
         try:
-            response = self.session.request(method, url, json=data, verify=False, timeout=15)
-            response.raise_for_status()
+            response = self.session.request(method, url, verify=False, timeout=20, **kwargs)
 
-            # --- THE CRITICAL FIX IS HERE ---
-            try:
-                response_json = response.json()
-            except json.JSONDecodeError:
-                logger.error(f"Failed to decode JSON from endpoint {endpoint}. Response was not valid JSON.")
-                logger.error(f"Response Status: {response.status_code}, Response Text: {response.text[:200]}") # Log the problematic response
-                return None # Return None instead of crashing
-            # --- END OF CRITICAL FIX ---
+            # اگر با خطای عدم دسترسی مواجه شدیم، یک بار دیگر برای لاگین تلاش می‌کنیم
+            if response.status_code in [401, 403]:
+                logger.warning("Authentication error (401/403). Attempting to re-login...")
+                if not self.login():
+                    return None
+                # درخواست اصلی را دوباره تکرار کن
+                response = self.session.request(method, url, verify=False, timeout=20, **kwargs)
 
-            if response_json.get('success', False):
-                return response_json
-            else:
-                msg = response_json.get('msg', 'Unknown API error')
-                logger.warning(f"API request to {endpoint} failed: {msg}")
-                # If it's an authentication error, try to re-login
-                if response.status_code in [401, 403] or "Login Failed" in msg:
-                    logger.warning(f"Authentication error for {endpoint}. Attempting to re-login.")
-                    if self.login():
-                        logger.info("Re-login successful. Retrying original request.")
-                        # Important: Do not re-call _make_request here to avoid infinite loops.
-                        # The session cookie is now fixed, subsequent calls should work.
-                        return self.session.request(method, url, json=data, verify=False, timeout=15).json()
-                    else:
-                        logger.error("Re-login failed.")
+            response.raise_for_status() # بررسی خطاهای HTTP مثل 500
+
+            # مدیریت پاسخ‌های خالی که باعث کرش می‌شدند
+            if not response.text:
+                logger.warning(f"Received empty response from {path}")
                 return None
+            
+            return response.json()
 
+        except json.JSONDecodeError:
+            logger.error(f"Failed to decode JSON from {path}. Response: {response.text[:200]}")
+            return None
         except requests.exceptions.RequestException as e:
-            logger.error(f"Request error for endpoint {endpoint}: {e}")
-            if retries < MAX_API_RETRIES:
-                time.sleep(1) # Simple sleep
-                logger.info(f"Retrying request for {endpoint} ({retries + 1}/{MAX_API_RETRIES})...")
-                return self._make_request(method, endpoint, data, retries + 1)
+            logger.error(f"Request failed for {path}: {e}")
             return None
 
     def login(self):
-        self.session.cookies.clear()
-        endpoint = "/login"
-        data = {"username": self.username, "password": self.password}
-        try:
-            res = self.session.post(f"{self.panel_url}{endpoint}", json=data, verify=False, timeout=10)
-            res.raise_for_status()
-            response_json = res.json()
-            if res.status_code == 200 and response_json.get("success"):
-                logger.info("Successfully logged in to X-UI panel. '3x-ui' cookie found.")
-                return True
-            logger.error(f"Failed to login. Message: {response_json.get('msg', 'Unknown error')}")
-            return False
-        except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
-            logger.error(f"Login request exception: {e}")
+        """لاگین به پنل و ذخیره کوکی نشست (session)."""
+        self.is_logged_in = False
+        payload = {'username': self.username, 'password': self.password}
+        response_data = self._request('post', '/login', data=payload)
+        
+        if response_data and response_data.get('success'):
+            logger.info(f"Successfully logged in to {self.base_url}")
+            self.is_logged_in = True
+            return True
+        else:
+            msg = response_data.get('msg', 'Unknown login error') if response_data else "No response from server"
+            logger.error(f"Login failed for {self.base_url}: {msg}")
             return False
 
     def list_inbounds(self):
-        """Lists all inbounds. Now protected by the improved _make_request."""
-        response_data = self._make_request("POST", "/panel/api/inbounds/list")
+        """
+        لیست تمام اینباندها را با جزئیات کامل برمی‌گرداند.
+        مسیر API بر اساس مستندات: /panel/api/inbounds/list
+        """
+        logger.info("Attempting to get inbound list...")
+        # متد درخواست GET است، نه POST
+        response_data = self._request('get', '/panel/api/inbounds/list')
+        
         if response_data and response_data.get('success'):
             return response_data.get('obj', [])
-        logger.warning("Could not retrieve inbound list or list was empty.")
+        
+        logger.warning(f"Could not get inbounds. Response: {response_data}")
         return []
 
-    def get_inbound(self, inbound_id):
-        """Gets a single inbound. Now protected by the improved _make_request."""
-        response_data = self._make_request("POST", f"/panel/api/inbounds/get/{inbound_id}")
+    def add_client(self, inbound_id, client_settings_json):
+        """
+        یک کلاینت جدید به یک اینباند مشخص اضافه می‌کند.
+        مسیر API بر اساس مستندات: /panel/api/inbounds/addClient
+        """
+        logger.info(f"Adding client to inbound {inbound_id}...")
+        payload = {
+            "id": inbound_id,
+            "settings": client_settings_json # این باید یک رشته JSON باشد
+        }
+        # متد درخواست POST است
+        response_data = self._request('post', '/panel/api/inbounds/addClient', json=payload)
+        
         if response_data and response_data.get('success'):
-            return response_data.get('obj')
-        return None # Return None if it fails
-
-    def add_client(self, data):
-        """Adds a client to an inbound. Now protected by the improved _make_request."""
-        response_data = self._make_request("POST", "/panel/api/inbounds/addClient", data=data)
-        return response_data is not None and response_data.get('success', False)
+            logger.info("Client added successfully.")
+            return True
+        
+        logger.error(f"Failed to add client. Response: {response_data}")
+        return False

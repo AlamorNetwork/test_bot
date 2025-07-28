@@ -34,9 +34,7 @@ class ConfigGenerator:
         master_xui_sub_id = generate_random_string(12)
         
         client_details_for_db = {
-            'uuid': master_client_uuid,
-            'email': master_client_email,
-            'sub_id': master_xui_sub_id
+            'uuid': master_client_uuid, 'email': master_client_email, 'sub_id': master_xui_sub_id
         }
 
         inbounds_by_server = {}
@@ -51,9 +49,7 @@ class ConfigGenerator:
             if not server_data: continue
 
             api_client = self.xui_api(panel_url=server_data['panel_url'], username=server_data['username'], password=server_data['password'])
-            if not api_client.login(): continue
             
-            # --- FIX: Get all inbound details once and store in a dictionary ---
             panel_inbounds_details = {i['id']: i for i in api_client.list_inbounds()}
             if not panel_inbounds_details:
                 logger.error(f"Could not retrieve any inbound details from server {server_id}.")
@@ -67,25 +63,27 @@ class ConfigGenerator:
             total_traffic_bytes = int(total_gb * (1024**3)) if total_gb and total_gb > 0 else 0
 
             for s_inbound in inbounds:
+                # ساخت JSON برای تنظیمات کلاینت
                 client_settings = {
                     "id": master_client_uuid, "email": master_client_email, "flow": "",
                     "totalGB": total_traffic_bytes, "expiryTime": expiry_time_ms,
                     "enable": True, "tgId": str(user_telegram_id), "subId": master_xui_sub_id,
                 }
                 
-                add_client_payload = {"id": s_inbound['inbound_id'], "settings": json.dumps({"clients": [client_settings]})}
+                # تبدیل دیکشنری به یک رشته JSON
+                client_settings_string = json.dumps({"clients": [client_settings]})
                 
-                if not api_client.add_client(add_client_payload):
+                # --- FIX: فراخوانی صحیح تابع جدید ---
+                if not api_client.add_client(s_inbound['inbound_id'], client_settings_string):
                     logger.error(f"Failed to add client to inbound {s_inbound['inbound_id']} on server {server_id}.")
                     continue
 
-                # --- FIX: Use the details from the dictionary instead of a new API call ---
                 inbound_details = panel_inbounds_details.get(s_inbound['inbound_id'])
                 if inbound_details:
                     single_config = self._generate_single_config_url(master_client_uuid, server_data, inbound_details)
                     if single_config:
                         all_generated_configs.append(single_config)
                 else:
-                    logger.warning(f"Details for inbound ID {s_inbound['inbound_id']} not found in the list from panel.")
+                    logger.warning(f"Details for inbound ID {s_inbound['inbound_id']} not found.")
 
         return (webhook_subscription_id, all_generated_configs, client_details_for_db) if all_generated_configs else (None, None, None)
