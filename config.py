@@ -46,3 +46,5 @@ ENABLE_GIGABYTE_PLANS = get_bool_env("ENABLE_GIGABYTE_PLANS", True)
 # --- Zarinpal Settings (تنظیمات درگاه زرین‌پال) ---
 ZARINPAL_SANDBOX = get_bool_env("ZARINPAL_SANDBOX", True) # برای تست روی True و برای استفاده واقعی روی False تنظیم شود
 ZARINPAL_MERCHANT_ID = os.getenv("ZARINPAL_MERCHANT_ID")
+
+MAX_API_RETRIES = 3
