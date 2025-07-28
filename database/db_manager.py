@@ -36,7 +36,7 @@ class DatabaseManager:
         return self.fernet.decrypt(encrypted_data.encode('utf-8')).decode('utf-8')
 
     def create_tables(self):
-        """جداول لازم را در دیتابیس PostgreSQL ایجاد می‌کند."""
+        """Creates the necessary tables in the PostgreSQL database."""
         commands = [
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -87,7 +87,6 @@ class DatabaseManager:
             CREATE TABLE IF NOT EXISTS payments (
                 id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), amount REAL NOT NULL,
                 payment_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, receipt_message_id BIGINT,
-                receipt_message_id TEXT , 
                 is_confirmed BOOLEAN DEFAULT FALSE, admin_confirmed_by INTEGER,
                 confirmation_date TIMESTAMPTZ, order_details_json TEXT,
                 admin_notification_message_id BIGINT, authority TEXT, ref_id TEXT
