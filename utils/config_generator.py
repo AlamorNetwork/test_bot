@@ -1,5 +1,3 @@
-# utils/config_generator.py
-
 import json
 import logging
 import uuid
@@ -44,12 +42,14 @@ class ConfigGenerator:
             api_client = self.xui_api(panel_url=server_data['panel_url'], username=server_data['username'], password=server_data['password'])
             if not api_client.login(): continue
 
+            # --- بخش اصلاح شده: محاسبه صحیح حجم و زمان ---
             expiry_time_ms = 0
             if duration_days and duration_days > 0:
                 expire_date = datetime.datetime.now() + datetime.timedelta(days=duration_days)
                 expiry_time_ms = int(expire_date.timestamp() * 1000)
             
             total_traffic_bytes = int(total_gb * (1024**3)) if total_gb and total_gb > 0 else 0
+            # --- پایان بخش اصلاح شده ---
 
             for s_inbound in inbounds:
                 client_uuid = str(uuid.uuid4())
@@ -76,6 +76,7 @@ class ConfigGenerator:
         return (subscription_id, all_generated_configs) if all_generated_configs else (None, None)
 
     def _generate_single_config_url(self, client_uuid: str, server_data: dict, inbound_details: dict) -> dict or None:
+        """این تابع اکنون به طور کامل از VLESS/REALITY پشتیبانی می‌کند."""
         try:
             protocol = inbound_details.get('protocol')
             remark = inbound_details.get('remark', f"Alamor-{server_data['name']}")
@@ -92,17 +93,19 @@ class ConfigGenerator:
                     params['flow'] = stream_settings.get('xtlsSettings', {}).get('flow', 'xtls-rprx-direct')
                 elif security == 'reality':
                     reality_settings = stream_settings.get('realitySettings', {})
-                    tls_settings = stream_settings.get('tlsSettings', {}) # fallback for older panels
+                    # برای سازگاری با پنل‌های قدیمی، از tlsSettings هم می‌خوانیم
+                    tls_settings = stream_settings.get('tlsSettings', {})
                     params['fp'] = reality_settings.get('fingerprint') or tls_settings.get('fingerprint')
                     params['pbk'] = reality_settings.get('publicKey') or tls_settings.get('publicKey')
                     params['sid'] = reality_settings.get('shortId') or tls_settings.get('shortId')
-                    params['sni'] = reality_settings.get('serverNames', [''])[0] or tls_settings.get('serverName')
+                    params['sni'] = (reality_settings.get('serverNames') or tls_settings.get('serverNames', ['']))[0]
                 
                 if network == 'ws':
                     ws_settings = stream_settings.get('wsSettings', {})
                     params['path'] = ws_settings.get('path', '/')
                     params['host'] = ws_settings.get('headers', {}).get('Host', address)
                 
+                # حذف پارامترهای خالی قبل از ساخت لینک
                 query_string = '&'.join([f"{k}={quote(str(v))}" for k, v in params.items() if v])
                 config_url = f"vless://{client_uuid}@{address}:{port}?{query_string}#{quote(remark)}"
             
@@ -111,6 +114,8 @@ class ConfigGenerator:
         except Exception as e:
             logger.error(f"Error in _generate_single_config_url: {e}")
         return None
+
+    
     def create_client_and_configs(self, user_telegram_id: int, server_id: int, total_gb: float, duration_days: int or None):
         """
         کلاینت را در پنل X-UI ایجاد می‌کند و لینک سابسکریپشن و کانفیگ‌های تکی را برمی‌گرداند.

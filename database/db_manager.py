@@ -483,20 +483,23 @@ class DatabaseManager:
 
     # --- توابع خریدها (Purchases) ---
     def add_purchase(self, user_id: int, purchase_type: str, server_id: int, profile_id: int, plan_id: int, 
-                    expire_date: str, initial_volume_gb: float, subscription_id: str, full_configs_json: str):
+                    expire_date: str, initial_volume_gb: float, subscription_id: str, full_configs_json: str,
+                    xui_client_uuid: str, xui_client_email: str, single_configs_json: str):
+        """یک رکورد خرید جدید را با تمام اطلاعات لازم در دیتابیس ثبت می‌کند."""
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         INSERT INTO purchases (user_id, purchase_type, server_id, profile_id, plan_id, expire_date, 
-                                            initial_volume_gb, subscription_id, full_configs_json, is_active)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                                            initial_volume_gb, subscription_id, full_configs_json, 
+                                            xui_client_uuid, xui_client_email, single_configs_json, is_active)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
                         RETURNING id;
                     """, (user_id, purchase_type, server_id, profile_id, plan_id, expire_date, 
-                        initial_volume_gb, subscription_id, full_configs_json))
+                        initial_volume_gb, subscription_id, full_configs_json,
+                        xui_client_uuid, xui_client_email, single_configs_json))
                     purchase_id = cursor.fetchone()[0]
                     conn.commit()
-                    logger.info(f"Purchase record created successfully for user_id {user_id}.")
                     return purchase_id
         except psycopg2.Error as e:
             logger.error(f"Error adding purchase for user {user_id}: {e}")
