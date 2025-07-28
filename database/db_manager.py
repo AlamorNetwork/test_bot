@@ -40,33 +40,54 @@ class DatabaseManager:
         commands = [
             """
             CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY, telegram_id BIGINT UNIQUE NOT NULL, first_name TEXT,
-                last_name TEXT, username TEXT, is_admin BOOLEAN DEFAULT FALSE,
-                join_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, last_activity TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                id SERIAL PRIMARY KEY,
+                telegram_id BIGINT UNIQUE NOT NULL,
+                first_name TEXT,
+                last_name TEXT,
+                username TEXT,
+                is_admin BOOLEAN DEFAULT FALSE,
+                join_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                last_activity TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )""",
             """
             CREATE TABLE IF NOT EXISTS servers (
-                id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL, panel_url TEXT NOT NULL,
-                username TEXT NOT NULL, password TEXT NOT NULL, subscription_base_url TEXT NOT NULL,
-                subscription_path_prefix TEXT NOT NULL, is_active BOOLEAN DEFAULT TRUE,
-                last_checked TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, is_online BOOLEAN DEFAULT FALSE
+                id SERIAL PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                panel_url TEXT NOT NULL,
+                username TEXT NOT NULL,
+                password TEXT NOT NULL,
+                subscription_base_url TEXT NOT NULL,
+                subscription_path_prefix TEXT NOT NULL,
+                is_active BOOLEAN DEFAULT TRUE,
+                last_checked TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                is_online BOOLEAN DEFAULT FALSE
             )""",
             """
             CREATE TABLE IF NOT EXISTS plans (
-                id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL, plan_type TEXT NOT NULL,
-                volume_gb REAL, duration_days INTEGER, price REAL, per_gb_price REAL,
+                id SERIAL PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                plan_type TEXT NOT NULL,
+                volume_gb REAL,
+                duration_days INTEGER,
+                price REAL,
+                per_gb_price REAL,
                 is_active BOOLEAN DEFAULT TRUE
             )""",
             """
             CREATE TABLE IF NOT EXISTS server_inbounds (
-                id SERIAL PRIMARY KEY, server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-                inbound_id INTEGER NOT NULL, remark TEXT, is_active BOOLEAN DEFAULT TRUE,
+                id SERIAL PRIMARY KEY,
+                server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+                inbound_id INTEGER NOT NULL,
+                remark TEXT,
+                is_active BOOLEAN DEFAULT TRUE,
                 UNIQUE (server_id, inbound_id)
             )""",
             """
             CREATE TABLE IF NOT EXISTS profiles (
-                id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL,
-                description TEXT, is_active BOOLEAN DEFAULT TRUE
+                id SERIAL PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                description TEXT,
+                is_active BOOLEAN DEFAULT TRUE
             )""",
             """
             CREATE TABLE IF NOT EXISTS profile_inbounds (
@@ -76,36 +97,48 @@ class DatabaseManager:
             )""",
             """
             CREATE TABLE IF NOT EXISTS purchases (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES users(id),
-            purchase_type TEXT NOT NULL DEFAULT 'server',
-            server_id INTEGER REFERENCES servers(id),
-            profile_id INTEGER REFERENCES profiles(id),
-            plan_id INTEGER REFERENCES plans(id),
-            purchase_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-            expire_date TIMESTAMPTZ,
-            initial_volume_gb REAL NOT NULL,
-            subscription_id TEXT UNIQUE,
-            full_configs_json TEXT,
-            xui_client_uuid TEXT,      -- ستون جدید
-            xui_client_email TEXT,     -- ستون جدید
-            single_configs_json TEXT,  -- ستون جدید
-            is_active BOOLEAN DEFAULT TRUE
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                purchase_type TEXT NOT NULL DEFAULT 'server',
+                server_id INTEGER REFERENCES servers(id),
+                profile_id INTEGER REFERENCES profiles(id),
+                plan_id INTEGER REFERENCES plans(id),
+                purchase_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                expire_date TIMESTAMPTZ,
+                initial_volume_gb REAL NOT NULL,
+                subscription_id TEXT UNIQUE,
+                full_configs_json TEXT,
+                xui_client_uuid TEXT,
+                xui_client_email TEXT,
+                single_configs_json TEXT,
+                is_active BOOLEAN DEFAULT TRUE
             )""",
             """
             CREATE TABLE IF NOT EXISTS payments (
-                id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), amount REAL NOT NULL,
-                payment_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, receipt_message_id BIGINT,
-                receipt_message_id TEXT , 
-                is_confirmed BOOLEAN DEFAULT FALSE, admin_confirmed_by INTEGER,
-                confirmation_date TIMESTAMPTZ, order_details_json TEXT,
-                admin_notification_message_id BIGINT, authority TEXT, ref_id TEXT
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                amount REAL NOT NULL,
+                payment_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                receipt_message_id TEXT,
+                is_confirmed BOOLEAN DEFAULT FALSE,
+                admin_confirmed_by INTEGER,
+                confirmation_date TIMESTAMPTZ,
+                order_details_json TEXT,
+                admin_notification_message_id TEXT,
+                authority TEXT,
+                ref_id TEXT
             )""",
             """
             CREATE TABLE IF NOT EXISTS payment_gateways (
-                id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL, type TEXT NOT NULL,
-                card_number TEXT, card_holder_name TEXT, merchant_id TEXT,
-                description TEXT, is_active BOOLEAN DEFAULT TRUE, priority INTEGER DEFAULT 0
+                id SERIAL PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                type TEXT NOT NULL,
+                card_number TEXT,
+                card_holder_name TEXT,
+                merchant_id TEXT,
+                description TEXT,
+                is_active BOOLEAN DEFAULT TRUE,
+                priority INTEGER DEFAULT 0
             )""",
             """
             CREATE TABLE IF NOT EXISTS free_test_usage (
